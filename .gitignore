@@ -1,0 +1,11 @@
+node_modules/
+.npm-cache/
+.npm-cache-browser/
+.browser-test/
+.output/
+.wxt/
+coverage/
+*.local
+.env*
+!.env.example
+*.log
