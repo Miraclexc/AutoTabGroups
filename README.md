@@ -101,3 +101,7 @@ AutoTabGroups 根据网页的标题、网址、描述和可选正文，将未分
 - [架构说明](docs/architecture.md)、[分类后端](docs/classifier-backends.md)、[思考设置](docs/model-thinking.md)、[测试与验收](docs/manual-testing.md)。
 
 欢迎通过本仓库的 [Issues](../../issues) 反馈问题或提出建议。
+
+## 许可证
+
+本项目采用 [MIT License](LICENSE)。
