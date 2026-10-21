@@ -9,7 +9,7 @@ export const effortLabels: Record<Effort, string> = {
 export const adapterLabels: Record<Generator['thinkingAdapter'], string> = {
   auto: '自动识别', openai: 'GPT / OpenAI reasoning_effort',
   'claude-adaptive': 'Claude 自适应思考（4.6 及更新）', 'claude-budget': 'Claude 思考预算（3.7 / 4 / 4.5）',
-  deepseek: 'DeepSeek', glm: 'GLM', kimi: 'Kimi', 'non-reasoning': '普通非推理模型（不发送思考参数）',
+  deepseek: 'DeepSeek', glm: 'GLM', kimi: 'Kimi', qwen: '通义千问', 'non-reasoning': '普通非推理模型（不发送思考参数）',
 };
 const legacyClaude = (model: string) => /claude-(?:3[.-]7|(?:sonnet|opus|haiku)-4(?:[.-][15])?(?:-\d{8})?$|(?:sonnet|opus|haiku)-4-0(?:-|$))/.test(model);
 const modelName = (config: Generator) => config.model.trim().toLowerCase().split('/').at(-1)!;
@@ -45,7 +45,12 @@ export function thinkingCapabilities(config: Generator) {
     else if (/^gpt-5\.[234](?:-|$)/.test(model)) levels = ['off', 'low', 'medium', 'high', 'xhigh'];
     else if (/^o[134](?:-|$)/.test(model)) levels = ['off', 'low', 'medium', 'high'];
     else if (originalGpt5(model)) levels = ['off', 'minimal', 'low', 'medium', 'high'];
+    if (model.startsWith('gemini-')) {
+      canDisable = /^gemini-2\.5-(?:flash|flash-lite)(?:-|$)/.test(model);
+      levels = [...(canDisable ? ['off' as const] : []), 'minimal', 'low', 'medium', 'high'];
+    }
   }
+  if (adapter === 'qwen') levels = ['off', 'on'];
   if (adapter.startsWith('claude-')) {
     canDisable = !/^claude-(?:fable-|mythos-|opus-5[.-]5)/.test(model);
     note = adapter === 'claude-budget' ? '低 / 中 / 高分别设置 1,024 / 4,096 / 8,192 个思考 token 的预算上限。' : '使用 Claude 自适应思考与 effort 档位。';
@@ -87,6 +92,7 @@ export function thinkingParameters(config: Generator): Record<string, unknown> {
   }
   if (config.protocol !== 'openai') throw new Error('所选思考适配需要 OpenAI Chat Completions 协议；请调整接口协议或适配方式');
   if (adapter === 'openai') return { reasoning_effort: effort === 'off' ? 'none' : effort };
+  if (adapter === 'qwen') return { enable_thinking: effort !== 'off' };
   if (adapter === 'kimi' && /^kimi-k3(?:-|$)/.test(model)) return { reasoning_effort: effort };
   if (adapter === 'kimi' && /^kimi-k2\.7-code(?:-|$)/.test(model)) return { thinking: { type: 'enabled', keep: 'all' } };
   if (adapter === 'kimi' && levels.length === 1) return {};

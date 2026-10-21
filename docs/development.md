@@ -1,6 +1,6 @@
 # 开发与贡献
 
-普通用户请从 [Releases](../../../releases) 下载插件安装包，并按 [README](../README.md#安装) 安装。本文面向修改源码、调试和参与贡献的开发者。
+普通用户请从 [Releases](https://github.com/Miraclexc/AutoTabGroups/releases) 下载插件安装包，并按 [README](../README.md#安装) 安装。本文面向修改源码、调试和参与贡献的开发者。
 
 ## 环境与构建
 
@@ -30,7 +30,11 @@ npm run dev
 | `npm run test:watch` | 持续运行单元测试 |
 | `npm run check` | 类型检查、lint、测试和生产构建 |
 | `npm run mock:server` | 启动本地固定规则模型服务 |
-| `npm run test:browser` | 使用独立浏览器配置运行端到端验收 |
+| `npm run test:browser` | 历史功能冒烟脚本，对应旧界面；当前验收使用下方回归脚本 |
+
+UI 全面验收使用 `node scripts/ui-acceptance.mjs . "C:\path\to\chrome.exe" final-1`。报告、逐页截图与索引写入 `output/playwright/ui/final-1/`；最后再加 `motion` 参数可单独录制正常动效。脚本使用独立 Chromium 配置与本地 mock，不连接真实模型服务。
+
+可用性修复回归使用 `node scripts/usability-regression.mjs . "C:\path\to\chrome.exe" usability-regression-1`，覆盖真实配置入口与复用、图标、首次建组与延迟收尾恢复。修改 `public/icon/logo.svg` 后，使用 `node scripts/generate-icons.mjs "C:\path\to\chrome.exe"` 重新生成四种PNG，再构建扩展。
 
 生产构建完成后，在 `chrome://extensions` 中加载 `.output/chrome-mv3`。发布时将 `npm run zip` 生成的插件 ZIP 上传为 GitHub Release 附件；GitHub 自动生成的 Source code 压缩包不能直接作为扩展加载。
 
@@ -64,13 +68,13 @@ npm run mock:server
 
 | 配置 | 地址 |
 | --- | --- |
-| 分类生成 / 普通大模型（OpenAI 或 Anthropic 兼容） | `http://127.0.0.1:4317/v1` |
+| 标准 Chat / 独立 Chat（OpenAI 或 Anthropic 兼容） | `http://127.0.0.1:4317/v1` |
 | Jev | `http://127.0.0.1:4317/v1/systemone` |
 | OpenAI Decisions | `http://127.0.0.1:4317/v1/decisions` |
 
-mock 使用固定规则：生成“插件开发”分类；页面含 Chrome、extension 或“插件”关键词时选择第一个类别，否则选择 `none`。它不代表真实模型的语义效果，不连接外部模型服务，也不记录页面内容。
+mock 使用固定规则：为至少三个相关剩余标签提出“插件开发”组；页面含 Chrome、extension 或“插件”关键词时选择第一个类别，否则选择 `none`。它不代表真实模型的语义效果，不连接外部模型服务，也不记录页面内容。
 
-浏览器依赖、启动方法和覆盖范围见[测试与验收](manual-testing.md)。应用设置页的“保存并测试连接”会请求当前配置的地址；只有配置为 mock 地址时才是本地测试。
+浏览器依赖、启动方法和覆盖范围见[测试与验收](manual-testing.md)。应用设置页的“测试连接（不保存）”会请求当前配置的地址；只有配置为 mock 地址时才是本地测试。
 
 ## 贡献前检查
 

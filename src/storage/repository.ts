@@ -2,7 +2,7 @@ import { candidateScoreSchema, categoriesSchema, defaultSettings, settingsSchema
 import { z } from 'zod';
 
 const configSchema = z.object({ settings: settingsSchema, categories: categoriesSchema });
-const keysSchema = z.object({ generator: z.string().default(''), classifier: z.string().default('') });
+const keysSchema = z.object({ generator: z.string().default(''), classifier: z.string().default(''), tavily: z.string().default(''), deepseek: z.string().default('') });
 const bindingsSchema = z.array(z.object({ categoryId: z.string(), windowId: z.number(), groupId: z.number() }));
 const ignoredSchema = z.array(z.object({ id: z.number(), url: z.string() }));
 const tabSchema = z.object({ id: z.number(), windowId: z.number(), url: z.string(), title: z.string(), groupId: z.number(), index: z.number() });
@@ -12,7 +12,7 @@ const taskSchema: z.ZodType<TaskRecord> = z.object({
   createdAt: z.number(), message: z.string().optional(), settings: settingsSchema, categories: categoriesSchema,
   items: z.array(z.object({
     tab: tabSchema, status: z.enum(['pending', 'read', 'applied', 'unmatched', 'uncertain', 'skipped', 'failed']),
-    message: z.string().optional(), preview: z.string().max(320).optional(), categoryId: z.string().optional(), extraction: z.enum(['metadata', 'readability', 'fallback']).optional(),
+    message: z.string().optional(), preview: z.string().max(320).optional(), categoryId: z.string().optional(), extraction: z.enum(['metadata', 'readability', 'fallback', 'tavily', 'deepseek']).optional(),
     truncated: z.boolean().optional(), cached: z.boolean().optional(),
     candidates: z.array(candidateScoreSchema).max(3).optional(), scoreSource: z.enum(['decision_probability', 'llm_estimate']).optional(),
   })),
@@ -33,11 +33,11 @@ export async function readConfig(): Promise<{ settings: Settings; categories: Ca
 export async function writeConfig(config: { settings: Settings; categories: Category[] }) {
   await chrome.storage.local.set({ [configKey]: { settings: settingsSchema.parse(config.settings), categories: categoriesSchema.parse(config.categories) } });
 }
-export async function readKeys(): Promise<{ generator: string; classifier: string }> {
+export async function readKeys(): Promise<{ generator: string; classifier: string; tavily: string; deepseek: string }> {
   const data = (await chrome.storage.local.get('credentials.v1'))['credentials.v1'];
   return keysSchema.parse(data || {});
 }
-export async function writeKeys(keys: { generator: string; classifier: string }) {
+export async function writeKeys(keys: { generator: string; classifier: string; tavily?: string; deepseek?: string }) {
   await chrome.storage.local.set({ 'credentials.v1': keys });
 }
 export async function readTask(): Promise<TaskRecord | null> {
@@ -63,7 +63,7 @@ export async function fingerprint(value: unknown): Promise<string> {
 }
 export async function cachedDecision(key: string): Promise<Classification | null> {
   const entry = cacheSchema.parse((await chrome.storage.session.get('decisions')).decisions || {})[key];
-  return entry && Date.now() - entry.at < 60 * 60 * 1000 ? entry.answer : null;
+  return entry ? entry.answer : null;
 }
 export async function cacheDecision(key: string, answer: Classification) {
   const entries = cacheSchema.parse((await chrome.storage.session.get('decisions')).decisions || {});

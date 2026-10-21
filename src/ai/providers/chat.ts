@@ -3,9 +3,16 @@ import type { Settings } from '../../shared/schemas';
 import { inputBytes } from '../budget';
 import { thinkingParameters } from '../thinking';
 import { endpoint, postJson, type Fetch } from '../transport';
+import { chatPreset } from '../../shared/chat-platforms';
+
+export function parseJsonText(text: string): unknown {
+  try { return JSON.parse(text.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '')); }
+  catch { throw new Error('模型未返回有效 JSON，请重试'); }
+}
 
 // Shared wire protocol for generation and classification; each caller supplies its own configuration.
 export async function requestJsonText(config: Settings['generator'], apiKey: string, system: string, user: string, budget: number, signal?: AbortSignal, fetcher?: Fetch) {
+  if (chatPreset(config) && !apiKey.trim()) throw new Error('请填写所选服务平台的 API Key');
   const thinking = thinkingParameters(config);
   if (config.protocol === 'openai') {
     const body = { model: config.model, messages: [{ role: 'system', content: system }, { role: 'user', content: user }], response_format: { type: 'json_object' }, ...thinking };

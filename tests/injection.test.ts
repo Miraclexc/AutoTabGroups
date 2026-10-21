@@ -33,4 +33,15 @@ describe('page injection and fallback', () => {
     get.mockResolvedValueOnce({ ...tab, pinned: false }).mockResolvedValueOnce({ ...tab, url: 'https://other.example' });
     await expect(readPage(tab, settings)).rejects.toThrow('网页已变化');
   });
+  it('times out even when executeScript itself never completes', async () => {
+    vi.useFakeTimers();
+    try {
+      executeScript.mockImplementation(() => new Promise(() => {}));
+      const pending = readPage(tab, settings);
+      await vi.advanceTimersByTimeAsync(5000);
+      const result = await pending;
+      expect(result.extraction).toBe('fallback');
+      expect(sendMessage).not.toHaveBeenCalled();
+    } finally { vi.useRealTimers(); }
+  });
 });

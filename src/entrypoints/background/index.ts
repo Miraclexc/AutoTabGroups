@@ -1,86 +1,82 @@
 import { defineBackground } from 'wxt/utils/define-background';
-import { commandSchema, isTrustedUi } from '../../shared/messages';
+import { isTrustedUi } from '../../shared/messages';
+import { actionLabels, actionNames, ORGANIZER_STATE_CHANGED, type OrganizeAction } from '../../shared/organizer';
 import { errorMessage } from '../../shared/errors';
-import { createGenerator } from '../../ai/providers/generator';
-import { generateDescription } from '../../ai/providers/description';
-import { createClassifier } from '../../ai/providers/classifier';
-import { TaskRunner } from '../../workflows/task-runner';
-import { getState, readConfig, readIgnored, readKeys, readTask, sessionId, writeConfig, writeIgnored, writeKeys } from '../../storage/repository';
-import { adoptGroup, saveCategories, synchronizeBindings, synchronizeBindingsOnStartup, watchGroupChanges } from '../../grouping/bindings';
+import { sessionId } from '../../storage/repository';
+import { diagnostic, workspace } from '../../storage/workspace';
+import { Organizer } from '../../workflows/organizer';
+import { createController } from '../../workflows/controller';
+import { syncNativeGroups } from '../../grouping/native';
+import { readUiPreferences, UI_PREFERENCES_KEY } from '../../shared/ui-preferences';
+import { englishActions, localizeMessage } from '../../shared/localization';
 
 export default defineBackground(() => {
-  const runner = new TaskRunner();
-  let mutating = false;
+  const runner = new Organizer(async () => {
+    // A notification is only an invalidation signal; each UI reads authoritative state.
+    await chrome.runtime.sendMessage({ type: ORGANIZER_STATE_CHANGED });
+  });
+  const handle = createController(runner);
   const initialize = async () => {
-    if (typeof chrome.storage.local.setAccessLevel !== 'function') throw new Error('当前浏览器缺少本地存储访问控制，请使用 Chrome 140 或更新版本');
     await chrome.storage.local.setAccessLevel({ accessLevel: 'TRUSTED_CONTEXTS' });
     await chrome.storage.session.setAccessLevel({ accessLevel: 'TRUSTED_CONTEXTS' });
-    await sessionId();
+    await sessionId(); await workspace();
+    await chrome.alarms.clear('resume-task');
     await chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true });
-    await synchronizeBindingsOnStartup();
     await runner.recover();
   };
   const ready = initialize();
-  watchGroupChanges(ready, error => console.error('分组关联同步失败', errorMessage(error)));
-  // Keep event listeners registered synchronously for MV3 wakeups.
-  chrome.alarms.onAlarm.addListener(alarm => {
-    if (alarm.name === 'resume-task') void ready.then(() => runner.recover());
+  void ready.catch(error => console.error('初始化失败', errorMessage(error)));
+  const menus = async () => {
+    const { locale } = await readUiPreferences();
+    await chrome.contextMenus.removeAll();
+    for (const id of actionNames) chrome.contextMenus.create({ id, title: locale === 'en' ? englishActions[id] : actionLabels[id], contexts: ['page', 'action'] });
+  };
+  chrome.storage.onChanged.addListener((changes, area) => {
+    const next = changes[UI_PREFERENCES_KEY]?.newValue as { locale?: string } | undefined;
+    const previous = changes[UI_PREFERENCES_KEY]?.oldValue as { locale?: string } | undefined;
+    if (area === 'local' && next?.locale !== previous?.locale)
+      void menus().catch(error => console.error(errorMessage(error)));
   });
-  chrome.runtime.onMessage.addListener((message, sender, reply) => {
-    // Only extension UI pages can issue commands. A page/content script cannot request keys or model calls.
-    if (!isTrustedUi(sender, chrome.runtime.id, chrome.runtime.getURL(''))) return;
-    const handle = async () => {
+  chrome.runtime.onInstalled.addListener(() => { void menus().catch(error => console.error(errorMessage(error))); });
+  chrome.runtime.onStartup.addListener(() => { void menus().catch(error => console.error(errorMessage(error))); });
+  const trigger = async (name: string, source: 'shortcut' | 'menu', supplied?: chrome.tabs.Tab) => {
+    if (!actionNames.includes(name as OrganizeAction)) return;
+    const action = name as OrganizeAction;
+    let tab = supplied;
+    const context = supplied ? Promise.resolve(supplied) : chrome.tabs.query({ active: true, lastFocusedWindow: true }).then(tabs => tabs[0]);
+    try {
+      tab = await context;
       await ready;
-      const command = commandSchema.parse(message);
-      if (command.type === 'state') { await synchronizeBindings(); return getState(); }
-      if (command.type === 'cancel') return runner.cancel();
-      if (mutating) throw new Error('正在保存或启动任务，请稍后重试');
-      mutating = true;
-      try {
-        if (runner.busy || (await readTask())?.status === 'running') throw new Error('任务运行中，请先等待完成或取消');
-        switch (command.type) {
-          case 'start': return await runner.start(command.kind, command.windowId);
-          case 'undo': return await runner.undo();
-          case 'save-settings': {
-            const config = await readConfig();
-            await writeConfig({ ...config, settings: command.settings });
-            const keys = await readKeys();
-            if (command.generatorKey !== undefined) keys.generator = command.generatorKey.trim();
-            if (command.classifierKey !== undefined) keys.classifier = command.classifierKey.trim();
-            await writeKeys(keys);
-            return;
-          }
-          case 'save-categories': {
-            await saveCategories(command.categories);
-            return;
-          }
-          case 'describe-category': {
-            const { settings } = await readConfig();
-            const keys = await readKeys();
-            return await generateDescription(command.name, settings, keys.generator);
-          }
-          case 'ignore': {
-            const tab = await chrome.tabs.get(command.tabId);
-            const list = (await readIgnored()).filter(item => item.id !== command.tabId);
-            if (command.ignored) list.push({ id: command.tabId, url: tab.url || '' });
-            await writeIgnored(list); return;
-          }
-          case 'clear-cache': await chrome.storage.session.remove('decisions'); return;
-          case 'adopt': {
-            await adoptGroup(command.categoryId, command.groupId); return;
-          }
-          case 'test-provider': {
-            const { settings } = await readConfig();
-            const keys = await readKeys();
-            const page = { title: 'Chrome extension API guide', url: 'https://example.com/extensions', description: 'A fictional page about building browser extensions.', extraction: 'metadata' as const, truncated: false };
-            if (command.provider === 'generator') await createGenerator(settings, keys.generator).generate([page]);
-            else await createClassifier(settings, keys.classifier).classify(page, [{ id: 'sample', name: '插件开发', description: '浏览器插件开发文档', include: [], exclude: [], color: 'blue' }]);
-            return '连接及响应格式验证成功（仅发送虚构样例）';
-          }
-        }
-      } finally { mutating = false; }
-    };
-    void handle().then(data => reply({ ok: true, data })).catch(error => reply({ ok: false, error: errorMessage(error) }));
+      await diagnostic({ action, source, at: Date.now(), windowId: tab?.windowId, executed: false, message: '已收到命令' });
+      if (!tab) throw new Error('无法确定触发窗口');
+      await runner.start(action, tab.windowId, tab.id, source);
+    } catch (error) {
+      const message = errorMessage(error);
+      await diagnostic({ action, source, at: Date.now(), windowId: tab?.windowId, executed: false, message });
+      if (!runner.busy) await chrome.action.setBadgeText({ text: '!' });
+      const { locale } = await readUiPreferences();
+      await chrome.action.setTitle({ title: locale === 'en' ? `${englishActions[action]}: ${localizeMessage(message, locale)}` : `${actionLabels[action]}：${message}` });
+    }
+  };
+  chrome.commands.onCommand.addListener((command, tab) => { void trigger(command, 'shortcut', tab); });
+  chrome.contextMenus.onClicked.addListener((info, tab) => { void trigger(String(info.menuItemId), 'menu', tab); });
+  chrome.alarms.onAlarm.addListener(alarm => {
+    if (alarm.name === 'organizer-resume') void ready.then(() => runner.recover()).catch(error => console.error(errorMessage(error)));
+  });
+  const groupChanged = (group: { windowId: number }) => {
+    void ready.then(() => syncNativeGroups(group.windowId)).catch(error => {
+      // Closing a window also emits removals. There is no work to do in that window.
+      if (!/No window|No current window|普通非无痕/.test(errorMessage(error))) console.error('分组信息同步失败', errorMessage(error));
+    });
+  };
+  chrome.tabGroups.onCreated.addListener(groupChanged);
+  chrome.tabGroups.onUpdated.addListener(groupChanged);
+  chrome.tabGroups.onRemoved.addListener(groupChanged);
+  chrome.tabGroups.onMoved.addListener(groupChanged);
+  // Native events never invoke AI; UI pages subscribe to them for display only.
+  chrome.runtime.onMessage.addListener((message, sender, reply) => {
+    if (!isTrustedUi(sender, chrome.runtime.id, chrome.runtime.getURL(''))) return;
+    void ready.then(() => handle(message)).then(data => reply({ ok: true, data })).catch(error => reply({ ok: false, error: errorMessage(error) }));
     return true;
   });
 });

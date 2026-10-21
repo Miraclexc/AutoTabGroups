@@ -1,8 +1,8 @@
 import type { IgnoredTab, Settings, TabSnapshot } from '../shared/schemas';
 
 export function snapshot(tab: chrome.tabs.Tab): TabSnapshot {
-  if (tab.id === undefined || !tab.url) throw new Error('标签信息不可用');
-  return { id: tab.id, windowId: tab.windowId, url: tab.url, title: tab.title || '', groupId: tab.groupId, index: tab.index };
+  if (tab.id === undefined) throw new Error('标签信息不可用');
+  return { id: tab.id, windowId: tab.windowId, url: tab.url || '', title: tab.title || '', groupId: tab.groupId, index: tab.index };
 }
 export function eligible(tab: chrome.tabs.Tab, ignored: IgnoredTab[]): boolean {
   return tab.id !== undefined && !tab.incognito && !tab.pinned && tab.groupId === -1

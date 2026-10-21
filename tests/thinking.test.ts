@@ -27,7 +27,8 @@ describe('thinking defaults and settings migration', () => {
     expect(migrated.settings.generator).toMatchObject({ thinkingEffort: 'off', thinkingAdapter: 'auto' });
     expect(migrated.categories).toEqual([category]);
     expect((await readTask())?.settings.generator.thinkingEffort).toBe('off');
-    expect(await readKeys()).toEqual(data['credentials.v1']);
+    expect(await readKeys()).toEqual({ generator: 'mock-key', classifier: 'mock-jev-key', tavily: '', deepseek: '' });
+    expect(data['credentials.v1']).toEqual({ generator: 'mock-key', classifier: 'mock-jev-key' });
   });
   it('round-trips explicit settings and rejects unknown effort/adapter values', () => {
     const custom = { ...settings, generator: config('custom', 'high', { thinkingAdapter: 'openai' }) };

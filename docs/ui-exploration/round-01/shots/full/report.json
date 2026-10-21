@@ -1,0 +1,118 @@
+[
+  {
+    "file": "a.png",
+    "target": "D:\\AutoTabGroup\\docs\\ui-exploration\\round-01\\a.html",
+    "name": "A · 精密工具",
+    "state": null,
+    "size": "1440x900",
+    "zoom": 1,
+    "animationWaitMs": 0,
+    "issues": [],
+    "lint": [
+      {
+        "rule": "contrastLow",
+        "label": "文字对比度不达标（正文低于 4.5:1，大字低于 3:1）",
+        "count": 21,
+        "examples": [
+          "span「侧栏 · 整理工作区」（4.15:1）",
+          "span「340 px」（4.15:1）",
+          "div.domain「developer.chrome.com」（3.73:1）"
+        ]
+      }
+    ]
+  },
+  {
+    "file": "b.png",
+    "target": "D:\\AutoTabGroup\\docs\\ui-exploration\\round-01\\b.html",
+    "name": "B · 编辑式工具",
+    "state": null,
+    "size": "1440x900",
+    "zoom": 1,
+    "animationWaitMs": 0,
+    "issues": [],
+    "lint": [
+      {
+        "rule": "contrastLow",
+        "label": "文字对比度不达标（正文低于 4.5:1，大字低于 3:1）",
+        "count": 28,
+        "examples": [
+          "div.frame-label「B / 编辑式工具风 侧栏 · 整理工作区」（4.47:1）",
+          "span「侧栏 · 整理工作区」（3.43:1）",
+          "div.domain「developer.chrome.com」（3.76:1）"
+        ]
+      }
+    ]
+  },
+  {
+    "file": "c.png",
+    "target": "D:\\AutoTabGroup\\docs\\ui-exploration\\round-01\\c.html",
+    "name": "C · 结构面板",
+    "state": null,
+    "size": "1440x900",
+    "zoom": 1,
+    "animationWaitMs": 0,
+    "issues": [],
+    "lint": [
+      {
+        "rule": "headingSpacing",
+        "label": "标题离上文比离下文还近",
+        "count": 1,
+        "examples": [
+          "h2「归组判断服务」（上 7px，下 25px）"
+        ]
+      },
+      {
+        "rule": "contrastLow",
+        "label": "文字对比度不达标（正文低于 4.5:1，大字低于 3:1）",
+        "count": 17,
+        "examples": [
+          "span.time「2 分钟前」（4.06:1）",
+          "span.time「当前窗口」（4.06:1）",
+          "div.group-desc「浏览器扩展、API 与开发文档」（4.09:1）"
+        ]
+      }
+    ]
+  },
+  {
+    "file": "sheet.png",
+    "width": 2000,
+    "height": 480,
+    "columns": 3,
+    "items": [
+      {
+        "naturalWidth": 1440,
+        "naturalHeight": 900,
+        "width": 640,
+        "height": 400,
+        "labelHeight": 32,
+        "x": 24,
+        "y": 24,
+        "label": "A · 精密工具",
+        "labelY": 432
+      },
+      {
+        "naturalWidth": 1440,
+        "naturalHeight": 900,
+        "width": 640,
+        "height": 400,
+        "labelHeight": 32,
+        "x": 680,
+        "y": 24,
+        "label": "B · 编辑式工具",
+        "labelY": 432
+      },
+      {
+        "naturalWidth": 1440,
+        "naturalHeight": 900,
+        "width": 640,
+        "height": 400,
+        "labelHeight": 32,
+        "x": 1336,
+        "y": 24,
+        "label": "C · 结构面板",
+        "labelY": 432
+      }
+    ],
+    "issues": []
+  }
+]
