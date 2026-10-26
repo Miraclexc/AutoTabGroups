@@ -5,6 +5,7 @@ import { chatPlatform, chatPreset, chatPresets, sameChatOrigin, selectChatPlatfo
 import { errorMessage } from '../shared/errors';
 import { ThinkingControls } from './ThinkingControls';
 import { RecentActivity } from './RecentActivity';
+import { UndoGrouping } from './UndoGrouping';
 import { useUi } from './preferences';
 import { Brand, DisclosureSummary, Icon, Modal, useConfirm } from './components';
 import { localizeMessage } from './messages';
@@ -278,7 +279,8 @@ export function Configuration({ state, windowId, refresh }: { state: OrganizerSt
           <div className="config-action-row"><button className="primary" disabled={busy} onClick={() => void act(() => chrome.tabs.create({ url: 'chrome://extensions/shortcuts' }))}>{t('在 Chrome 中管理快捷键', 'Manage shortcuts in Chrome')}<Icon name="external" size={16} /></button></div>
 
         </section>}
-        {section === 'general' && <details className="config-special-card config-activity" id="activity"><DisclosureSummary><span><strong>{t('最近整理', 'Recent activity')}</strong><small>{t('查看最近一次结果、重新判断或撤销变更。', 'Review the latest results, reassess tabs or undo changes.')}</small></span></DisclosureSummary><RecentActivity state={state} windowId={windowId} refresh={refresh} onOpenSettings={() => chooseSection('services')} /></details>}
+        {section === 'general' && <div className="config-undo"><UndoGrouping state={state} windowId={windowId} disabled={locked} onUndo={() => void act(async () => { setNotice(await dispatch<string>({ type: 'undo' })); })} /></div>}
+        {section === 'general' && <details className="config-special-card config-activity" id="activity"><DisclosureSummary><span><strong>{t('最近整理', 'Recent activity')}</strong><small>{t('查看最近一次结果、重新判断或手动改分。', 'Review the latest results, reassess tabs or move them manually.')}</small></span></DisclosureSummary><RecentActivity state={state} windowId={windowId} refresh={refresh} onOpenSettings={() => chooseSection('services')} /></details>}
         {section === 'advanced' && <section className="config-pane config-tools" id="data"><h2 className="config-section-title">{t('数据与诊断', 'Data & diagnostics')}</h2>
           <div ref={dataFeedback}>{feedbackArea === 'data' && error && <p className="alert error" role="alert">{localizeMessage(error, locale)}</p>}
           {feedbackArea === 'data' && notice && <p className="alert success" role="status">{localizeMessage(notice, locale)}</p>}</div>

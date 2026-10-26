@@ -4,6 +4,7 @@ import { colors, type Category, type TabSnapshot } from '../shared/schemas';
 import { errorMessage } from '../shared/errors';
 import { Configuration } from './Configuration';
 import { WindowTabScope } from './WindowTabScope';
+import { UndoGrouping } from './UndoGrouping';
 import { chatPreset } from '../shared/chat-platforms';
 import { Brand, DisclosureSummary, Icon, Modal, useConfirm } from './components';
 import { UiProvider, useUi } from './preferences';
@@ -176,6 +177,7 @@ function AppContent({ initialView }: { initialView?: 'settings' }) {
           <ul className="group-members">{group.members.map(member => <li key={member.id}><button className="text-button" title={member.title || member.url} onClick={() => void locate(member)}><Icon name="file" size={14} /><span>{member.title || member.url}</span><Icon name="external" size={12} /></button></li>)}</ul>
         </div></details>)}</div>
     </section>
+    <UndoGrouping state={state} windowId={windowId} disabled={locked} onUndo={() => void action(async () => { setNotice(await dispatch<string>({ type: 'undo' })); })} />
     </div>
     {moving && <Modal title={t('手动指定分组', 'Choose a group')} busy={busy} onClose={() => { if (!busy) setMoving(undefined); }} footer={<><button disabled={busy} onClick={() => setMoving(undefined)}>{t('取消', 'Cancel')}</button><button className="primary" disabled={locked || !moveTarget} onClick={() => void action(() => dispatch({ type: 'move-manual', tab: moving, groupId: Number(moveTarget) }), undefined, true).then(ok => { if (ok) { setMoving(undefined); setNotice(t('已手动改分', 'Page moved')); } })}>{busy ? t('正在移动…', 'Moving…') : t('确认改分', 'Move page')}</button></>}>
       <p className="modal-page-title">{moving.title || moving.url}</p><p className="muted">{t('直接移动到选定分组，不调用模型。', 'Move directly to the selected group without a model request.')}</p>{modalError && <div className="alert error" role="alert">{message(modalError)}</div>}<label className="field">{t('目标分组', 'Target group')}<select aria-label={t('目标分组', 'Target group')} disabled={busy} value={moveTarget} onChange={event => setMoveTarget(event.target.value)}><option value="">{t('请选择', 'Choose a group')}</option>{state.groups.filter(group => group.nativeId !== moving.groupId).map(group => <option key={group.nativeId} value={group.nativeId}>{group.name || t('未命名分组', 'Untitled group')} · {t(`${group.members.length} 页`, countLabel(group.members.length, 'page'))}{state.groups.filter(other => other.name === group.name).length > 1 ? ` · #${group.nativeId}` : ''}</option>)}</select></label>

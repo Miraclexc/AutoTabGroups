@@ -117,7 +117,7 @@ try {
   };
   await check('Manual one-page exception and undo remain usable without stale undo text in the next result', async () => {
     await manualGroup(); assert.equal((await state()).groups[0].members.length, 1);
-    await options.getByRole('button', { name: /撤销最近变更/ }).click();
+    await options.getByRole('button', { name: '撤销最近一次分组', exact: true }).click();
     await poll(state, value => !value.groups.length, 'Manual undo');
     const previous = (await state()).task.id;
     await sidebar.getByRole('button', { name: '更新分组', exact: true }).click();

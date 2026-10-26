@@ -40,7 +40,6 @@ export function RecentActivity({ state, windowId, refresh, onOpenSettings }: { s
   const locate = (tab: TabSnapshot) => action(() => dispatch({ type: 'locate-tab', tab }));
   const beginMove = (tab: TabSnapshot) => { setModalError(''); setMoving(tab); setMoveTarget(''); };
   const configurationFailure = !!task && [task.message, ...task.items.filter(item => item.status === 'failed').map(item => item.message)].some(value => /HTTP (400|401|403|404)|模型名称|思考.*不支持|请先配置|缺少.*配置|API.?key|authenticat|unauthorized/i.test(value || ''));
-  const canUndo = !locked && state.journal?.sessionId === state.sessionId && state.journal.records.some(record => record.applied && !record.undone);
   const counts = { applied: 0, unmatched: 0, skipped: 0, failed: 0 };
   task?.items.forEach(item => { if (item.status === 'uncertain') counts.unmatched++; else if (item.status in counts) counts[item.status as keyof typeof counts]++; });
   const summary = (Object.keys(counts) as (keyof typeof counts)[]).filter(status => counts[status]).map(status => t(`${counts[status]} 页${statusNames[status][0]}`, `${counts[status]} ${statusNames[status][1].toLowerCase()}`)).join(t(' · ', ' · '));
@@ -48,11 +47,11 @@ export function RecentActivity({ state, windowId, refresh, onOpenSettings }: { s
   const currentTaskTime = task ? new Date(task.createdAt).toLocaleString(locale, { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
 
   return <div className="recent-activity config-pane">
-    <p className="activity-explanation">{t('这里保留最近一次整理的结果，可查看每页判断、重试或撤销最近的成员变更。不会累积历史记录，也不会自动重新整理。', 'Review the latest run, inspect decisions, retry pages or undo the latest grouping changes. No history is accumulated and no automatic reorganization is performed.')}</p>
+    <p className="activity-explanation">{t('这里保留最近一次整理的结果，可查看每页判断或重试。不会累积历史记录，也不会自动重新整理。', 'Review the latest run, inspect decisions or retry pages. No history is accumulated and no automatic reorganization is performed.')}</p>
     {error && <div className="alert error" role="alert">{message(error)}</div>}
     <div className="sidebar-toast" role="status" aria-live="polite" aria-atomic="true">{notice && <div className="sidebar-toast-message"><Icon name="check" size={17} /><span>{message(notice)}</span></div>}</div>
     <section className="recent-section" aria-labelledby="recent-heading">
-      <div className="sidebar-section-title"><h2 id="recent-heading">{t('任务结果', 'Task result')}</h2>{canUndo && state.journal && <button className="text-button" title={t(`撤销最近变更 · 窗口 ${state.journal.windowId}`, `Undo latest changes · window ${state.journal.windowId}`)} aria-label={t(`撤销最近变更 · 窗口 ${state.journal.windowId}`, `Undo latest changes · window ${state.journal.windowId}`)} onClick={() => void action(async () => { setNotice(await dispatch<string>({ type: 'undo' })); })}><Icon name="undo" size={15} />{t('撤销变更', 'Undo changes')}</button>}</div>
+      <div className="sidebar-section-title"><h2 id="recent-heading">{t('任务结果', 'Task result')}</h2></div>
       {!task ? <p className="sidebar-hint">{t('整理后的结果会显示在这里。', 'Your organizing results will appear here.')}</p> : <>
         <div className="task-state"><span className={`task-indicator ${task.status === 'completed' && !counts.applied ? 'unchanged' : task.status}`} aria-hidden="true" /><strong>{task.status === 'completed' && !counts.applied ? t('本次未移动标签', 'No tabs moved') : t(taskNames[task.status][0], taskNames[task.status][1])}</strong><span className="muted">{task.windowId === windowId ? t('当前窗口', 'This window') : t('其他窗口', 'Other window')}</span></div>
         <p className="task-caption">{label(task.action)} · <time dateTime={new Date(task.createdAt).toISOString()}>{currentTaskTime}</time>{!liveTask && t(' · 上次浏览器会话', ' · Previous browser session')}</p>
@@ -73,7 +72,6 @@ export function RecentActivity({ state, windowId, refresh, onOpenSettings }: { s
         </details>}
         {liveTask && !configurationFailure && task.items.some(item => item.status === 'failed') && <button className="retry-failed" disabled={locked} onClick={() => void action(() => dispatch({ type: 'retry-items', taskId: task.id, tabIds: task.items.filter(item => item.status === 'failed').map(item => item.tab.id), bypassCache: true }))}><Icon name="refresh" size={14} />{t('重试失败项', 'Retry failed pages')}</button>}
       </>}
-      {!locked && state.journal && state.journal.records.some(record => record.applied && !record.undone) && <details className="undo-context"><DisclosureSummary compact>{state.journal.id === task?.id ? t('本次可撤销变更', 'Changes from this run') : t('上次可撤销变更', 'Earlier undoable changes')}</DisclosureSummary><p>{t(`${state.journal.records.filter(record => record.applied && !record.undone).length} 页 · 窗口 ${state.journal.windowId}`, `${state.journal.records.filter(record => record.applied && !record.undone).length} tabs · Window ${state.journal.windowId}`)} · {new Date(state.journal.createdAt).toLocaleString(locale)}</p><p>{t('撤销针对这次变更；无变更的新整理不会替换它。', 'Undo applies to these changes. A later run with no changes does not replace them.')}</p></details>}
     </section>
 
     {task && <div className="activity-maintenance"><p className="muted">{t('清除详情不会改变标签分组，也不会删除可撤销变更。', 'Clearing details does not change tab groups or remove undoable changes.')}</p><button disabled={locked} onClick={async () => {

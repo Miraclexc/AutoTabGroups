@@ -533,7 +533,7 @@ try {
     assert.equal(requests.length, before, 'Manual grouping must not call a model');
     await capture(sidebar, 'sidebar-manual-single-group');
     await section(4);
-    await options.getByRole('button', { name: /撤销最近变更/ }).click();
+    await options.getByRole('button', { name: '撤销最近一次分组', exact: true }).click();
     await poll(state, value => !value.groups.some(group => group.name === 'Cooking notes'), 'Undo did not remove manual group');
   });
   await check('Group edit conflicts preserve form input and never silently overwrite', async () => {
