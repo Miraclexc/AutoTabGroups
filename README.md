@@ -4,8 +4,6 @@
 
 AutoTabGroups 是一个 Chrome 扩展。通过快捷键、侧栏或右键菜单，你可以整理当前页面，也可以一次整理当前窗口的未分组网页。模型根据网页内容和分组说明判断归属，优先加入已有组，并在你选择时为相关页面建立新组。
 
-[下载 0.1.3](https://github.com/Miraclexc/AutoTabGroups/releases/tag/v0.1.3) · [使用指南](docs/user-guide.md) · [反馈问题](https://github.com/Miraclexc/AutoTabGroups/issues)
-
 ## 主要功能
 
 - **语义归组。** 结合网页标题、网址、描述和可选正文，理解页面与分组的关系。
@@ -20,7 +18,18 @@ AutoTabGroups 是一个 Chrome 扩展。通过快捷键、侧栏或右键菜单�
 
 支持 **Chrome 140 或更高版本**。
 
-1. 前往 [Releases](https://github.com/Miraclexc/AutoTabGroups/releases)，下载插件附件 `auto-tab-groups-0.1.3-chrome.zip`。
+### 从 Chrome Web Store 安装（推荐）
+
+1. 打开 [AutoTabGroups 商店页面](https://chromewebstore.google.com/detail/onbdjfkcdbialblneckngkhfjdldmgig)。
+2. 点击“添加至 Chrome”，在弹出的确认框中选择“添加扩展程序”。
+3. 在 Chrome 工具栏的扩展菜单中固定 AutoTabGroups，点击图标打开侧栏。
+4. 按下方“快速开始”配置模型服务，即可开始整理。
+
+### 从 Releases 手动安装
+
+需要手动加载或使用指定版本时，可以下载插件 ZIP 安装包：
+
+1. 前往 [Releases](https://github.com/Miraclexc/AutoTabGroups/releases)，下载对应版本的插件 ZIP 附件，不要选择 GitHub 自动生成的 Source code 源码包。
 2. 将 ZIP 解压到一个长期保留的文件夹。
 3. 打开 `chrome://extensions`，启用右上角的“开发者模式”。
 4. 点击“加载已解压的扩展程序”，选择直接包含 `manifest.json` 的解压目录。
@@ -120,7 +129,11 @@ AutoTabGroups 是一个 Chrome 扩展。通过快捷键、侧栏或右键菜单�
 
 ## 数据与配置管理
 
+**AutoTabGroups 开发者不收集或接收用户的网页信息、API Key 或使用记录。** 插件不会将这些数据上传至开发者服务器，也不内置使用统计或广告追踪。为提供标签整理功能，插件仍需在本机读取和处理必要的网页信息，并保存配置与任务记录。
+
 配置、密钥、分组说明和最近任务保存在本机扩展存储。整理与说明生成时，所选页面信息发送到你配置的模型服务；选择远程正文读取时，读取服务接收清理后的网址。模型与读取服务按各自 API 规则提供服务和计费。
+
+> **第三方服务隐私提醒：** 标签归组需要调用用户配置的大模型服务。我们无法保证该服务提供商不会收集、记录或留存请求中的信息，是否将其用于训练或其他用途也取决于提供商的政策。使用前请留意所选服务的隐私政策，避免提交不宜向第三方披露的敏感网页信息。
 
 分类缓存保存当前浏览器会话中最多 300 条判断，依据网页信息、模型配置和候选分组内容复用结果。高级设置提供配置与说明的导出、导入预览、缓存清理和诊断；备份包含模型与读取设置及分组说明，API Key 在本机单独管理。
 
