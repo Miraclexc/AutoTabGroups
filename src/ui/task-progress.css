@@ -1,0 +1,35 @@
+.organizer-progress { margin-top: 16px; padding: 14px; background: var(--surface-muted); border: 1px solid var(--border); border-radius: 10px; }
+.organizer-progress-heading { display: flex; align-items: center; gap: 10px; }
+.organizer-progress-title { flex: 1; min-width: 0; }
+.organizer-progress-title strong { display: block; font-size: 14px; overflow-wrap: anywhere; }
+.organizer-progress-cancel { flex: 0 0 auto; min-height: 30px; padding: 4px 8px; font-size: 12px; }
+.organizer-progress-count { display: flex; justify-content: space-between; gap: 8px; color: var(--muted); font-size: 12px; margin: 12px 0 5px; }
+.organizer-progress-count strong { color: var(--accent); font-variant-numeric: tabular-nums; }
+.organizer-progress progress { display: block; height: 6px; }
+.organizer-progress progress:indeterminate { background: linear-gradient(90deg, var(--border) 20%, var(--accent) 50%, var(--border) 80%); background-size: 200% 100%; animation: organizer-pending 1.8s linear infinite; }
+.organizer-progress progress:indeterminate::-webkit-progress-bar { background: transparent; }
+.organizer-progress-hint { font-size: 12px; color: var(--muted); margin-top: 8px; }
+.organizer-progress-current { display: flex; align-items: center; gap: 8px; margin-top: 10px; padding: 8px 10px; border-left: 2px solid var(--accent); background: var(--surface); border-radius: 3px; }
+.organizer-progress-current > div { min-width: 0; }
+.organizer-progress-current small { font-size: 11px; color: var(--muted); }
+.organizer-progress-current p { font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.organizer-progress-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-top: 12px; }
+.organizer-progress-stats > span { display: flex; flex-direction: column; color: var(--muted); font-size: 11px; }
+.organizer-progress-stats strong { font-size: 19px; font-weight: 650; line-height: 1.3; font-variant-numeric: tabular-nums; color: var(--text); }
+.organizer-progress-stats .grouped strong { color: var(--success); }
+.organizer-progress-stats .failed strong { color: var(--danger); }
+.organizer-progress-pages { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; margin-top: 12px; }
+.organizer-progress-pages > span { width: 9px; height: 9px; background: var(--border); border-radius: 2px; }
+.organizer-progress-pages .page-read, .organizer-progress-pages .page-unmatched, .organizer-progress-pages .page-uncertain, .organizer-progress-pages .page-skipped { background: var(--muted); }
+.organizer-progress-pages .page-applied { background: var(--success); }
+.organizer-progress-pages .page-failed { background: var(--danger); }
+.organizer-progress-pages .current { background: var(--accent); outline: 1px solid var(--accent); outline-offset: 1px; animation: organizer-current 1.3s ease-in-out infinite; }
+.organizer-progress-pages small { color: var(--muted); font-size: 10px; }
+.organizer-progress-legend { display: flex; flex-wrap: wrap; gap: 4px 10px; margin-top: 7px; font-size: 10px; color: var(--muted); }
+.organizer-progress-legend span { display: inline-flex; align-items: center; gap: 4px; }
+.organizer-progress-legend i { width: 6px; height: 6px; border-radius: 1px; background: var(--muted); }
+.organizer-progress-legend .waiting { background: var(--border); }.organizer-progress-legend .grouped { background: var(--success); }.organizer-progress-legend .failed { background: var(--danger); }
+@keyframes organizer-pending { to { background-position: -200% 0; } }
+@keyframes organizer-current { 50% { opacity: .35; } }
+@media (prefers-reduced-motion: reduce) { .organizer-progress progress:indeterminate, .organizer-progress-pages .current { animation: none; } }
+.organizer-progress-legend .active { background: var(--accent); }

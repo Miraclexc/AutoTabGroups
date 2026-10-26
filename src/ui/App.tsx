@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { actionLabels, dispatch, stageLabels, ORGANIZER_STATE_CHANGED, type GroupView, type OrganizerState, type OrganizeAction } from '../shared/organizer';
+import { actionLabels, dispatch, ORGANIZER_STATE_CHANGED, type GroupView, type OrganizerState, type OrganizeAction } from '../shared/organizer';
 import { colors, type Category, type TabSnapshot } from '../shared/schemas';
 import { errorMessage } from '../shared/errors';
 import { Configuration } from './Configuration';
 import { WindowTabScope } from './WindowTabScope';
 import { UndoGrouping } from './UndoGrouping';
+import { TaskProgress } from './TaskProgress';
 import { chatPreset } from '../shared/chat-platforms';
 import { Brand, DisclosureSummary, Icon, Modal, useConfirm } from './components';
 import { UiProvider, useUi } from './preferences';
@@ -168,7 +169,7 @@ function AppContent({ initialView }: { initialView?: 'settings' }) {
       <WindowTabScope tabs={state.tabs} groups={state.groups} />
       <div className="batch-actions"><button className="sidebar-action" aria-label={label('organize-window')} disabled={locked || !configured || !eligibleTabs.length} onClick={() => void action(() => dispatch({ type: 'organize', action: 'organize-window', windowId }))}><span>{label('organize-window')}</span>{bindings['organize-window'] && <kbd>{bindings['organize-window']}</kbd>}</button>
         <button className="sidebar-action" aria-label={label('organize-window-with-new')} disabled={locked || !configured || !eligibleTabs.length} onClick={() => void action(() => dispatch({ type: 'organize', action: 'organize-window-with-new', windowId }))}><span>{label('organize-window-with-new')}</span>{bindings['organize-window-with-new'] ? <kbd>{bindings['organize-window-with-new']}</kbd> : <Icon name="arrow" size={16} />}</button></div>
-      {task?.status === 'running' && <div className="sidebar-running" aria-live="polite"><progress aria-label={t('任务处理中', 'Task in progress')} /><div><p>{message(stageLabels[task.stage])}</p><button disabled={busy} onClick={() => void action(() => dispatch({ type: 'cancel' }))}>{t('取消任务', 'Cancel task')}</button></div></div>}
+      {task?.status === 'running' && <TaskProgress task={task} disabled={busy} onCancel={() => void action(() => dispatch({ type: 'cancel' }))} />}
     </section>
     <section className="sidebar-section groups-section" aria-labelledby="groups-heading"><div className="sidebar-section-title"><h2 id="groups-heading">{t('本窗口分组', 'Window groups')}</h2><button className="text-button" disabled={locked} onClick={startManual}><Icon name="plus" size={15} />{t('手动建组', 'New group')}</button></div>
       {!state.groups.length && <div className="groups-empty"><Icon name="file" /><p>{t('分组会显示在这里', 'Your groups will appear here')}</p><span>{t('更新分组自动整理，或手动选择页面建组。', 'Update groups to organize automatically, or choose pages for a manual group.')}</span></div>}

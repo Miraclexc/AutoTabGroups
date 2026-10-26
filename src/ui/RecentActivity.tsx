@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { actionLabels, dispatch, stageLabels, type OrganizerState, type OrganizeAction } from '../shared/organizer';
+import { actionLabels, dispatch, type OrganizerState, type OrganizeAction } from '../shared/organizer';
+import { TaskProgress } from './TaskProgress';
 import type { TabSnapshot } from '../shared/schemas';
 import { errorMessage } from '../shared/errors';
 import { CandidateScores } from './CandidateScores';
@@ -55,7 +56,7 @@ export function RecentActivity({ state, windowId, refresh, onOpenSettings }: { s
       {!task ? <p className="sidebar-hint">{t('整理后的结果会显示在这里。', 'Your organizing results will appear here.')}</p> : <>
         <div className="task-state"><span className={`task-indicator ${task.status === 'completed' && !counts.applied ? 'unchanged' : task.status}`} aria-hidden="true" /><strong>{task.status === 'completed' && !counts.applied ? t('本次未移动标签', 'No tabs moved') : t(taskNames[task.status][0], taskNames[task.status][1])}</strong><span className="muted">{task.windowId === windowId ? t('当前窗口', 'This window') : t('其他窗口', 'Other window')}</span></div>
         <p className="task-caption">{label(task.action)} · <time dateTime={new Date(task.createdAt).toISOString()}>{currentTaskTime}</time>{!liveTask && t(' · 上次浏览器会话', ' · Previous browser session')}</p>
-        {task.status === 'running' && <div className="task-progress"><progress aria-label={t('任务处理中', 'Task in progress')} /><div className="task-progress-row"><p role="status">{message(stageLabels[task.stage])}</p><button disabled={busy} onClick={() => void action(() => dispatch({ type: 'cancel' }))}>{t('取消任务', 'Cancel task')}</button></div></div>}
+        {task.status === 'running' && <TaskProgress task={task} disabled={busy} onCancel={() => void action(() => dispatch({ type: 'cancel' }))} />}
         {task.status !== 'running' && summary && <p className="task-overview">{summary}</p>}
         {task.message && !/^处理结束：/.test(task.message) && <p className="task-message" role="status">{message(task.message)}</p>}
         {commonReason && <p className="task-message">{message(commonReason)}</p>}
