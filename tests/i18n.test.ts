@@ -58,6 +58,16 @@ describe('offline translation resources and message contracts', () => {
       expect(t('status.uncertain')).toBe(t('status.unmatched'));
     }
   });
+  it.each([400, 401, 403, 404])('recognizes reader HTTP %s as a configuration error', status => {
+    expect(isConfigurationError(msg('reader.http', { provider: 'Tavily', status }))).toBe(true);
+  });
+  it('distinguishes missing reader credentials from temporary reader failures', () => {
+    expect(isConfigurationError(msg('reader.key', { provider: 'DeepSeek Fetch' }))).toBe(true);
+    for (const status of [429, 500, 503])
+      expect(isConfigurationError(msg('reader.http', { provider: 'Tavily', status }))).toBe(false);
+    for (const code of ['reader.remoteTimeout', 'reader.connection', 'reader.empty'] as const)
+      expect(isConfigurationError(msg(code, { provider: 'Tavily' }))).toBe(false);
+  });
   it('localizes validation issues by structured fields, including invalid endpoints and limits', () => {
     const endpoint = endpointSchema.safeParse('https://user:password@example.com');
     if (endpoint.success) throw new Error('Expected invalid endpoint');

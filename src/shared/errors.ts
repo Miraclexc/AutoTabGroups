@@ -26,7 +26,7 @@ export function errorForDisplay(error: unknown): UserMessage {
 
 const configurationErrors = new Set<TranslationKey>([
   'error.authentication', 'model.configure', 'model.decisionsName', 'model.jevName', 'model.classifierName',
-  'model.anthropicProtocol', 'model.openaiProtocol',
+  'model.anthropicProtocol', 'model.openaiProtocol', 'reader.key',
   'messages.enter_the_selected_service_platform_s_api_key',
   'messages.configure_the_selected_page_reader_s_api_key_first',
   'messages.configure_the_standard_chat_service_for_group_descriptions_and',
@@ -40,7 +40,8 @@ export function isConfigurationError(message: UserMessage | undefined): boolean 
   // Raw external errors may not carry our application codes.
   if (typeof message === 'string') return /HTTP (400|401|403|404)|API.?key|authenticat|unauthorized/i.test(message);
   return configurationErrors.has(message.code)
-    || (message.code === 'error.http' && [400, 401, 403, 404].includes(Number(message.params?.status)));
+    || ((message.code === 'error.http' || message.code === 'reader.http')
+      && [400, 401, 403, 404].includes(Number(message.params?.status)));
 }
 
 export function errorMessage(error: unknown): string {

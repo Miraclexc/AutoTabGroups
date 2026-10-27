@@ -1,4 +1,4 @@
-import { renderMessage } from '../src/i18n';
+import { msg, renderMessage } from '../src/i18n';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { settings as fixtureSettings } from './fixtures';
 import type { Category, PageInput, Settings, TabSnapshot } from '../src/shared/schemas';
@@ -11,8 +11,9 @@ vi.mock('../src/browser/injection', () => ({ readPage: model.read }));
 import { Organizer, classificationKey } from '../src/workflows/organizer';
 import { createController } from '../src/workflows/controller';
 import { CACHE, getDecision, putDecision, readJournal, readOrganizerTask, workspace } from '../src/storage/workspace';
-import { currentShape, sampleMembers, syncNativeGroups } from '../src/grouping/native';
+import { attachProfile, currentShape, sampleMembers, syncNativeGroups } from '../src/grouping/native';
 import { snapshot } from '../src/browser/tabs';
+import { isConfigurationError } from '../src/shared/errors';
 
 let local: Record<string, unknown>, session: Record<string, unknown>;
 let tabs: chrome.tabs.Tab[], groups: chrome.tabGroups.TabGroup[], nextGroup: number;
@@ -340,6 +341,67 @@ describe('cache and model-free display', () => {
   });
   it('uses evenly spaced samples of at most five members', () => {
     expect(sampleMembers([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10])).toEqual([0, 3, 5, 8, 10]);
+  });
+});
+
+describe('remote reader error recovery', () => {
+  async function prepareReader(provider: 'tavily' | 'deepseek', fallback = false) {
+    settings.readContent = true;
+    settings.reader = { ...settings.reader, provider, fallback };
+    (local['credentials.v1'] as Record<string, string>)[provider] = 'reader-key';
+    existing();
+    // A saved description ensures the error occurs while processing ungrouped pages.
+    await attachProfile(22, 10, { name: '开发', description: 'Development documents', color: 'blue', source: 'user' });
+    vi.stubGlobal('chrome', { ...chrome,
+      scripting: { executeScript: vi.fn().mockResolvedValue([]) },
+      tabs: { ...chrome.tabs, sendMessage: vi.fn(async (id: number, request: { readContent: boolean }) => {
+        const current = tabs.find(t => t.id === id)!;
+        return { documentUrl: current.url, page: { title: current.title, url: current.url, description: 'Local description',
+          ...(request.readContent ? { content: 'local article', extraction: 'readability' } : { extraction: 'metadata' }), truncated: false } };
+      }) },
+    });
+    const { readPage } = await vi.importActual<typeof import('../src/browser/injection')>('../src/browser/injection');
+    model.read.mockImplementation(readPage);
+  }
+  it.each(['tavily', 'deepseek'] as const)('stops %s after its first authorization failure', async provider => {
+    await prepareReader(provider);
+    const fetcher = vi.fn(async () => new Response('', { status: 401 }));
+    vi.stubGlobal('fetch', fetcher);
+    const runner = new Organizer();
+    await runner.start('organize-window', 10); const result = await done(runner);
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    expect(result.status).toBe('failed');
+    expect(result.message).toEqual(msg('reader.http', { provider: provider === 'tavily' ? 'Tavily' : 'DeepSeek Fetch', status: 401 }));
+    expect(isConfigurationError(result.message)).toBe(true);
+    expect(result.items.every(item => item.status === 'failed')).toBe(true);
+    expect(tabs.slice(0, 3).every(t => t.groupId === -1)).toBe(true);
+    expect(model.classify).not.toHaveBeenCalled(); expect(groupCall).not.toHaveBeenCalled();
+  });
+  it.each(['tavily', 'deepseek'] as const)('continues grouping with local content when %s fallback is enabled', async provider => {
+    await prepareReader(provider, true);
+    const fetcher = vi.fn(async () => new Response('', { status: 401 }));
+    vi.stubGlobal('fetch', fetcher);
+    const runner = new Organizer();
+    await runner.start('organize-window', 10); const result = await done(runner);
+    expect(fetcher).toHaveBeenCalledTimes(3);
+    expect(model.classify).toHaveBeenCalledTimes(3);
+    expect(model.classify.mock.calls.every(([page]) => page.content === 'local article')).toBe(true);
+    expect(result.status).toBe('completed');
+    expect(result.items.every(item => item.status === 'applied' && item.extraction === 'readability')).toBe(true);
+  });
+  it.each([429, 500])('keeps processing later pages after reader HTTP %s', async status => {
+    await prepareReader('tavily');
+    const fetcher = vi.fn(async (_url: string, request: RequestInit) => Response.json({ results: [
+      { url: JSON.parse(request.body as string).urls[0], raw_content: 'remote article' },
+    ] })).mockImplementationOnce(async () => new Response('', { status }));
+    vi.stubGlobal('fetch', fetcher);
+    const runner = new Organizer();
+    await runner.start('organize-window', 10); const result = await done(runner);
+    expect(fetcher).toHaveBeenCalledTimes(3);
+    expect(result.status).toBe('partial');
+    expect(result.items.map(item => item.status)).toEqual(['failed', 'applied', 'applied']);
+    expect(isConfigurationError(result.items[0].message)).toBe(false);
+    expect(tabs.slice(0, 3).map(t => t.groupId)).toEqual([-1, 22, 22]);
   });
 });
 
