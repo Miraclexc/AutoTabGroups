@@ -1,14 +1,15 @@
+import { msg, renderMessage, translator } from '../../i18n';
+import { AppError } from '../../shared/errors';
 import { defineBackground } from 'wxt/utils/define-background';
 import { isTrustedUi } from '../../shared/messages';
-import { actionLabels, actionNames, ORGANIZER_STATE_CHANGED, type OrganizeAction } from '../../shared/organizer';
-import { errorMessage } from '../../shared/errors';
+import { actionNames, ORGANIZER_STATE_CHANGED, type OrganizeAction } from '../../shared/organizer';
+import { errorMessage, errorForDisplay } from '../../shared/errors';
 import { sessionId } from '../../storage/repository';
 import { diagnostic, workspace } from '../../storage/workspace';
 import { Organizer } from '../../workflows/organizer';
 import { createController } from '../../workflows/controller';
 import { syncNativeGroups } from '../../grouping/native';
 import { readUiPreferences, UI_PREFERENCES_KEY } from '../../shared/ui-preferences';
-import { englishActions, localizeMessage } from '../../shared/localization';
 
 export default defineBackground(() => {
   const runner = new Organizer(async () => {
@@ -20,7 +21,6 @@ export default defineBackground(() => {
     await chrome.storage.local.setAccessLevel({ accessLevel: 'TRUSTED_CONTEXTS' });
     await chrome.storage.session.setAccessLevel({ accessLevel: 'TRUSTED_CONTEXTS' });
     await sessionId(); await workspace();
-    await chrome.alarms.clear('resume-task');
     await chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true });
     await runner.recover();
   };
@@ -29,7 +29,8 @@ export default defineBackground(() => {
   const menus = async () => {
     const { locale } = await readUiPreferences();
     await chrome.contextMenus.removeAll();
-    for (const id of actionNames) chrome.contextMenus.create({ id, title: locale === 'en' ? englishActions[id] : actionLabels[id], contexts: ['page', 'action'] });
+    for (const id of actionNames) chrome.contextMenus.create({ id, title: translator(locale)(`actions.${id}`), contexts: ['page', 'action'] });
+    if (!runner.busy) await chrome.action.setTitle({ title: translator(locale)('extension.open') });
   };
   chrome.storage.onChanged.addListener((changes, area) => {
     const next = changes[UI_PREFERENCES_KEY]?.newValue as { locale?: string } | undefined;
@@ -47,15 +48,15 @@ export default defineBackground(() => {
     try {
       tab = await context;
       await ready;
-      await diagnostic({ action, source, at: Date.now(), windowId: tab?.windowId, executed: false, message: '已收到命令' });
-      if (!tab) throw new Error('无法确定触发窗口');
+      await diagnostic({ action, source, at: Date.now(), windowId: tab?.windowId, executed: false, message: msg('messages.command_received') });
+      if (!tab) throw new AppError('window.unavailable');
       await runner.start(action, tab.windowId, tab.id, source);
     } catch (error) {
-      const message = errorMessage(error);
+      const message = errorForDisplay(error);
       await diagnostic({ action, source, at: Date.now(), windowId: tab?.windowId, executed: false, message });
       if (!runner.busy) await chrome.action.setBadgeText({ text: '!' });
       const { locale } = await readUiPreferences();
-      await chrome.action.setTitle({ title: locale === 'en' ? `${englishActions[action]}: ${localizeMessage(message, locale)}` : `${actionLabels[action]}：${message}` });
+      await chrome.action.setTitle({ title: renderMessage(msg('action.result', { action: msg(`actions.${action}`), message }), locale) });
     }
   };
   chrome.commands.onCommand.addListener((command, tab) => { void trigger(command, 'shortcut', tab); });
@@ -76,7 +77,7 @@ export default defineBackground(() => {
   // Native events never invoke AI; UI pages subscribe to them for display only.
   chrome.runtime.onMessage.addListener((message, sender, reply) => {
     if (!isTrustedUi(sender, chrome.runtime.id, chrome.runtime.getURL(''))) return;
-    void ready.then(() => handle(message)).then(data => reply({ ok: true, data })).catch(error => reply({ ok: false, error: errorMessage(error) }));
+    void ready.then(() => handle(message)).then(data => reply({ ok: true, data })).catch(error => reply({ ok: false, error: errorForDisplay(error) }));
     return true;
   });
 });

@@ -1,0 +1,20 @@
+{
+  "extensionName": {
+    "message": "AutoTabGroups"
+  },
+  "extensionDescription": {
+    "message": "Organize Chrome tabs using page meaning and your own groups."
+  },
+  "openExtension": {
+    "message": "Open AutoTabGroups"
+  },
+  "commandCurrent": {
+    "message": "Organize the current ungrouped tab"
+  },
+  "commandWindow": {
+    "message": "Update groups in this window (initialize if empty)"
+  },
+  "commandNew": {
+    "message": "Update this window and allow new groups"
+  }
+}

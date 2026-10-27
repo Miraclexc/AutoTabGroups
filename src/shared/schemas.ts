@@ -1,5 +1,7 @@
 import { z } from 'zod';
 import { chatPlatformIds } from './chat-platforms';
+import { msg, type UserMessage } from '../i18n';
+import { userMessageSchema } from '../i18n/message-schema';
 
 export const colors = ['grey', 'blue', 'red', 'yellow', 'green', 'pink', 'purple', 'cyan', 'orange'] as const;
 export const categoryDraftSchema = z.object({
@@ -11,18 +13,20 @@ export const categoryDraftSchema = z.object({
 });
 export const categorySchema = categoryDraftSchema.extend({
   description: z.string().trim().max(1200).default(''),
-  id: z.string().min(1).max(100).regex(/^[a-zA-Z0-9_-]+$/).refine(id => id !== 'none', '分类 ID 不能使用保留的拒绝归类选项'),
+  id: z.string().min(1).max(100).regex(/^[a-zA-Z0-9_-]+$/).refine(id => id !== 'none', { params: { userMessage: msg('validation.reservedId') } }),
 });
 export const categoriesSchema = z.array(categorySchema).max(50).superRefine((items, ctx) => {
   if (new Set(items.map(x => x.id)).size !== items.length)
-    ctx.addIssue({ code: 'custom', message: '分类 ID 不能重复' });
+    ctx.addIssue({ code: 'custom', params: { userMessage: msg('validation.duplicateId') } });
   if (new Set(items.map(x => x.name.toLowerCase())).size !== items.length)
-    ctx.addIssue({ code: 'custom', message: '分类名称不能重复' });
+    ctx.addIssue({ code: 'custom', params: { userMessage: msg('validation.duplicateName') } });
 });
 export const endpointSchema = z.string().url().refine(value => {
-  const url = new URL(value);
-  return ['https:', 'http:'].includes(url.protocol) && !url.username && !url.password && !url.search && !url.hash;
-}, '请输入不含凭据、查询参数和片段的 HTTP(S) 地址');
+  try {
+    const url = new URL(value);
+    return ['https:', 'http:'].includes(url.protocol) && !url.username && !url.password && !url.search && !url.hash;
+  } catch { return false; }
+}, { params: { userMessage: msg('validation.endpoint') } });
 const providerSchema = z.object({ baseUrl: endpointSchema, model: z.string().trim().max(150) });
 export const thinkingAdapters = ['auto', 'openai', 'claude-adaptive', 'claude-budget', 'deepseek', 'glm', 'kimi', 'qwen', 'non-reasoning'] as const;
 export const thinkingEfforts = ['off', 'on', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'] as const;
@@ -75,7 +79,7 @@ export const pageInputSchema = z.object({
   title: z.string().max(1000), url: z.string().max(4000), description: z.string().max(2000),
   content: z.string().max(20000).optional(),
   extraction: z.enum(['metadata', 'readability', 'fallback', 'tavily', 'deepseek']),
-  truncated: z.boolean(), warning: z.string().max(300).optional(),
+  truncated: z.boolean(), warning: userMessageSchema.optional(),
   titleSource: z.string().max(50).optional(), descriptionSource: z.string().max(50).optional(),
 });
 export type PageInput = z.infer<typeof pageInputSchema>;
@@ -86,7 +90,7 @@ export type CandidateScore = z.infer<typeof candidateScoreSchema>;
 export interface TaskItem {
   tab: TabSnapshot;
   status: 'pending' | 'read' | 'applied' | 'unmatched' | 'uncertain' | 'skipped' | 'failed';
-  message?: string;
+  message?: UserMessage;
   preview?: string;
   categoryId?: string;
   extraction?: PageInput['extraction'];
@@ -96,19 +100,5 @@ export interface TaskItem {
   scoreSource?: Classification['scoreSource'];
 }
 export interface ApplyRecord { tab: TabSnapshot; targetGroupId: number; applied: boolean; undone?: boolean }
-export interface TaskRecord {
-  id: string; sessionId: string; kind: 'generate' | 'update';
-  status: 'running' | 'completed' | 'cancelled' | 'interrupted' | 'failed';
-  createdAt: number; message?: string;
-  items: TaskItem[]; settings: Settings; categories: Category[];
-  draft?: CategoryDraft[];
-  undo: ApplyRecord[];
-}
 export interface Binding { categoryId: string; windowId: number; groupId: number }
 export interface IgnoredTab { id: number; url: string }
-export interface AppState {
-  settings: Settings; categories: Category[]; task: TaskRecord | null;
-  tabs: TabSnapshot[]; ignored: IgnoredTab[]; bindings: Binding[];
-  nativeGroups: { id: number; windowId: number; title: string; color: string }[];
-  hasGeneratorKey: boolean; hasClassifierKey: boolean;
-}

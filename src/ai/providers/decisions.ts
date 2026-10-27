@@ -1,3 +1,4 @@
+import { AppError } from '../../shared/errors';
 import { z } from 'zod';
 import { endpointSchema, type Settings } from '../../shared/schemas';
 import type { TabClassifier } from '../contracts';
@@ -20,20 +21,20 @@ export function createDecisionsClassifier(settings: Settings, apiKey: string, fe
   return {
     async classify(page, categories, signal) {
       const config = settings.classifier;
-      if (!config.model) throw new Error('请先填写 Decisions 模型名称');
+      if (!config.model) throw new AppError('model.decisionsName');
       const { criteria, ids } = categoryChoices(categories);
       const body = {
         model: config.model, input: JSON.stringify(page),
         questions: [{ type: 'choice', name: 'route', instructions: routeInstructions,
           choices: Object.entries(criteria).map(([value, description]) => ({ value, description })) }],
       };
-      if (inputBytes(body) > settings.requestBudget) throw new Error('本页与分类规则超过请求预算，请减少正文长度或提高预算');
+      if (inputBytes(body) > settings.requestBudget) throw new AppError('budget.page');
       const data = await postJson(endpointSchema.parse(config.baseUrl), apiKey ? { Authorization: `Bearer ${apiKey}` } : {}, body, signal, fetcher);
       const parsed = responseSchema.parse(data);
       const answer = parsed.answers[0];
-      if (answer.type === 'refusal') throw new Error('Decisions 拒绝判断，保持未分组');
+      if (answer.type === 'refusal') throw new AppError('model.decisionsRefused');
       if (new Set(answer.probabilities.map(item => item.value)).size !== answer.probabilities.length)
-        throw new Error('Decisions 返回了重复的候选分数');
+        throw new AppError('model.duplicateScores');
       return validateChoice({ ...answer, probabilities: Object.fromEntries(answer.probabilities.map(item => [item.value, item.probability])) }, criteria, ids, parsed.model, 'decision_probability');
     },
   };

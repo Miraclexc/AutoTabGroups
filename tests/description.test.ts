@@ -2,15 +2,15 @@ import { describe, expect, it, vi } from 'vitest';
 import { generateDescription } from '../src/ai/providers/description';
 import { parseGroups } from '../src/ai/providers/generator';
 import { categoriesSchema } from '../src/shared/schemas';
-import { commandSchema } from '../src/shared/messages';
-import { category, settings } from './fixtures';
+import { organizerCommandSchema } from '../src/shared/organizer';
+import { category, settings, tab } from './fixtures';
 
 describe('optional descriptions and explicit AI generation (mock HTTP)', () => {
   it('accepts name-only categories and an empty AI group plan', () => {
     expect(categoriesSchema.parse([{ id: 'reading', name: '论文' }])[0]).toMatchObject({ description: '', include: [], exclude: [], color: 'blue' });
     expect(parseGroups('{"groups":[]}', 8)).toEqual([]);
     expect(() => parseGroups('{"groups":[{"name":"论文"}]}', 8)).toThrow();
-    expect(() => commandSchema.parse({ type: 'describe-category', name: ' ' })).toThrow();
+    expect(() => organizerCommandSchema.parse({ type: 'create-manual', windowId: tab.windowId, tabs: [tab], value: { name: ' ', description: '', color: 'blue' } })).toThrow();
   });
   it.each(['openai', 'anthropic'] as const)('generates a description with %s using only the name and generator settings', async protocol => {
     const content = JSON.stringify({ description: '学术论文、研究方法及文献阅读笔记。' });

@@ -3,6 +3,7 @@ import { readPage } from '../src/browser/injection';
 import { remoteContent } from '../src/extraction/remote';
 import { readerDefaults, settingsSchema, type Settings } from '../src/shared/schemas';
 import { localizeMessage } from '../src/shared/localization';
+import { msg, joinMessages } from '../src/i18n';
 import { page, settings, tab } from './fixtures';
 
 const get = vi.fn(), send = vi.fn(), fetcher = vi.fn(), storage = vi.fn();
@@ -59,7 +60,9 @@ describe('reader selection and content contracts', () => {
   });
   it('falls back locally on a partial-success response with no matching result', async () => {
     fetcher.mockResolvedValue(Response.json({ results: [{ url: 'https://unrelated.example/', raw_content: 'wrong page' }], failed_results: [{ url: tab.url, error: 'unreadable' }] }));
-    expect(await readPage(tab, config)).toMatchObject({ content: 'local article', extraction: 'readability', warning: expect.stringContaining('本地正文') });
+    const result = await readPage(tab, config);
+    expect(result).toMatchObject({ content: 'local article', extraction: 'readability' });
+    expect(localizeMessage(result.warning, 'zh-CN')).toContain('本地正文');
   });
   it('disabled fallback fails the page and does not scan body or leak raw service errors', async () => {
     config.reader.fallback = false;
@@ -96,10 +99,12 @@ describe('reader selection and content contracts', () => {
       fetcher.mockImplementation((_url, init) => new Promise((_resolve, reject) => init.signal.addEventListener('abort', () => reject(init.signal.reason))));
       const promise = readPage(tab, config);
       await vi.advanceTimersByTimeAsync(20000);
-      expect(await promise).toMatchObject({ content: 'local article', warning: expect.stringContaining('超时') });
+      const result = await promise;
+      expect(result.content).toBe('local article');
+      expect(localizeMessage(result.warning, 'zh-CN')).toContain('超时');
     } finally { vi.useRealTimers(); }
   });
   it('translates combined reader failures without exposing an untranslated status', () => {
-    expect(localizeMessage('Tavily 正文读取失败（HTTP 401）；已改用浏览器本地正文', 'en')).toBe('Tavily reader failed (HTTP 401); Used local page content instead');
+    expect(localizeMessage(joinMessages(msg('reader.http', { provider: 'Tavily', status: 401 }), msg('messages.used_local_page_content_instead')), 'en')).toBe('Tavily reader failed (HTTP 401); Used local page content instead');
   });
 });

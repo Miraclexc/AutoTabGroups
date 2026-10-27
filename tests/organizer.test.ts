@@ -1,3 +1,4 @@
+import { renderMessage } from '../src/i18n';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { settings as fixtureSettings } from './fixtures';
 import type { Category, PageInput, Settings, TabSnapshot } from '../src/shared/schemas';
@@ -79,6 +80,56 @@ beforeEach(() => {
 async function done(runner: Organizer) { await vi.waitFor(() => expect(runner.busy).toBe(false)); return (await readOrganizerTask())!; }
 function existing(id = 22, name = '开发') { groups.push(group(id, name)); tabs.push(tab(50 + id, id)); }
 
+describe('generation language follows saved UI preferences', () => {
+  it.each(['zh-CN', 'en'] as const)('uses %s for automatic and manual descriptions and connection tests', async locale => {
+    local['ui.preferences.v1'] = { theme: 'dark', locale };
+    existing();
+    const runner = new Organizer();
+    await runner.start('organize-window', 10);
+    expect((await done(runner)).outputLocale).toBe(locale);
+    expect(model.describe.mock.calls.at(-1)?.[5]).toBe(locale);
+    const controller = createController(runner);
+    await controller({ type: 'describe-group', groupId: 22, windowId: 10 });
+    expect(model.describe.mock.calls.at(-1)?.[5]).toBe(locale);
+    await controller({ type: 'test-config', provider: 'generator', settings });
+    expect(model.describe.mock.calls.at(-1)?.[5]).toBe(locale);
+    expect(groups[0].title).toBe('开发');
+  });
+  it('snapshots the starting language across description and planning even if preferences change', async () => {
+    local['ui.preferences.v1'] = { locale: 'en' };
+    existing();
+    model.describe.mockImplementation(async () => {
+      local['ui.preferences.v1'] = { locale: 'zh-CN' };
+      return 'Existing development group';
+    });
+    model.classify.mockResolvedValue({ choice: 'none', confidence: 1, model: 'mock', probabilities: { none: 1 } });
+    const runner = new Organizer();
+    await runner.start('organize-window-with-new', 10);
+    const result = await done(runner);
+    expect(result.outputLocale).toBe('en');
+    expect(model.describe.mock.calls[0][5]).toBe('en');
+    expect(model.propose.mock.calls[0][5]).toBe('en');
+    expect(groups[0].title).toBe('开发');
+  });
+  it.each(['zh-CN', 'en'] as const)('restores a task with outputLocale=%s without losing its language choice', async outputLocale => {
+    const runner = new Organizer();
+    await runner.start('organize-window', 10);
+    const completed = await done(runner);
+    // Resume from a prepared planning checkpoint in the same browser session.
+    groups = []; tabs.forEach(t => { t.groupId = -1; });
+    local['ui.preferences.v1'] = { locale: 'zh-CN' };
+    local['organizer.task.v3'] = { ...completed, outputLocale, status: 'running', stage: 'plan', journal: [], initialGroups: [], targets: [],
+      items: completed.items.map(i => ({ tab: i.tab, status: 'unmatched', pass: 'existing' })) };
+    await chrome.storage.local.remove('organizer.undo.v2');
+    model.propose.mockClear();
+    const restored = new Organizer();
+    await restored.recover();
+    const result = await done(restored);
+    expect(model.propose, renderMessage(result.message, 'zh-CN')).toHaveBeenCalled();
+    expect(model.propose.mock.calls[0][5]).toBe(outputLocale);
+  });
+});
+
 describe('three native-group workflows', () => {
   it('single page never creates a group in an empty window', async () => {
     const runner = new Organizer();
@@ -95,7 +146,7 @@ describe('three native-group workflows', () => {
     tabs = tabs.slice(0, count);
     const runner = new Organizer(); await runner.start('organize-window', 10); const result = await done(runner);
     expect(model.propose).not.toHaveBeenCalled(); expect(groupCall).not.toHaveBeenCalled();
-    expect(result.items.every(item => item.message === `当前仅有 ${count} 页可用于新建分组；自动建组至少需要 3 页，可手动建组。`)).toBe(true);
+    expect(result.items.every(item => typeof item.message !== 'string' && item.message?.code === 'task.tooFew' && item.message.params?.count === count)).toBe(true);
   });
   it('ordinary batch describes external groups then only joins existing groups', async () => {
     existing();
@@ -332,14 +383,14 @@ describe('journals, cancellation, migration and configuration', () => {
   it('same-session recovery applies a persisted classification without another request', async () => {
     existing(); const config = await workspace(); const targets = await syncNativeGroups(10);
     session.sessionId = 'same';
-    const task: OrganizeTask = { version: 2, id: 'resume', sessionId: 'same', windowId: 10, action: 'organize-window', source: 'sidebar', status: 'running', stage: 'apply-existing', createdAt: 1,
+    const task: OrganizeTask = { version: 3, outputLocale: 'zh-CN', id: 'resume', sessionId: 'same', windowId: 10, action: 'organize-window', source: 'sidebar', status: 'running', stage: 'apply-existing', createdAt: 1,
       allowNew: false, settings: config.settings, initialGroups: await currentShape(10), targets, items: [{ tab: snapshot(tabs[0]), status: 'read', categoryId: targets[0].id }], journal: [] };
-    local['organizer.task.v2'] = task;
+    local['organizer.task.v3'] = task;
     const runner = new Organizer(); await runner.recover(); await done(runner);
     expect(tabs[0].groupId).toBe(22); expect(model.classify).not.toHaveBeenCalled();
   });
   it('cross-session recovery never replays old IDs', async () => {
-    local['organizer.task.v2'] = { version: 2, id: 'old', sessionId: 'other', status: 'running', items: [], journal: [] };
+    local['organizer.task.v3'] = { version: 3, outputLocale: 'zh-CN', id: 'old', sessionId: 'other', status: 'running', items: [], journal: [] };
     const runner = new Organizer(); await runner.recover();
     expect((await readOrganizerTask())?.status).toBe('interrupted'); expect(groupCall).not.toHaveBeenCalled();
   });
@@ -347,7 +398,7 @@ describe('journals, cancellation, migration and configuration', () => {
     existing(); const config = await workspace(); const targets = await syncNativeGroups(10);
     const original = snapshot(tabs[0]); tabs[0].groupId = 22; session.sessionId = 'same';
     local['organizer.undo.v2'] = { id: 'resume', sessionId: 'same', windowId: 10, createdAt: 1, records: [{ tab: original, targetGroupId: 22, applied: true }] };
-    local['organizer.task.v2'] = { version: 2, id: 'resume', sessionId: 'same', windowId: 10, action: 'organize-window', source: 'sidebar', status: 'running', stage: 'apply-existing', createdAt: 1,
+    local['organizer.task.v3'] = { version: 3, outputLocale: 'zh-CN', id: 'resume', sessionId: 'same', windowId: 10, action: 'organize-window', source: 'sidebar', status: 'running', stage: 'apply-existing', createdAt: 1,
       allowNew: false, settings: config.settings, initialGroups: await currentShape(10), targets, items: [{ tab: original, status: 'read', categoryId: targets[0].id }], journal: [] };
     const runner = new Organizer(); await runner.recover(); const result = await done(runner);
     expect(result.items[0].status).toBe('applied'); expect(groupCall).not.toHaveBeenCalled(); expect(model.classify).not.toHaveBeenCalled();

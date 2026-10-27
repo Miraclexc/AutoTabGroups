@@ -1,3 +1,5 @@
+import { AppError } from '../shared/errors';
+import { msg, type UserMessage } from '../i18n';
 import { unchanged } from '../browser/tabs';
 import { sessionId } from '../storage/repository';
 import { clearPending, commitJournal, pendingJournal, readJournal, workspace, writePending } from '../storage/workspace';
@@ -16,15 +18,15 @@ export async function validTabs(tabs: TabSnapshot[]): Promise<TabSnapshot[]> {
 export async function joinExisting(tabs: TabSnapshot[], groupId: number, write: WriteRecords, signal?: AbortSignal) {
   if (!tabs.length) return [];
   const windowId = tabs[0].windowId;
-  if (tabs.some(t => t.windowId !== windowId || t.groupId !== -1)) throw new Error('自动归组只能操作同窗口未分组标签');
+  if (tabs.some(t => t.windowId !== windowId || t.groupId !== -1)) throw new AppError('messages.automatic_grouping_only_handles_ungrouped_tabs_in_the_same');
   const target = await chrome.tabGroups.get(groupId);
-  if (target.windowId !== windowId) throw new Error('目标分组已移动到其他窗口');
+  if (target.windowId !== windowId) throw new AppError('messages.the_target_group_has_moved_to_another_window');
   let valid = await validTabs(tabs);
   if (!valid.length) return [];
   await write(valid.map(tab => ({ tab, targetGroupId: groupId, applied: false })));
   valid = await validTabs(valid);
   const latest = await chrome.tabGroups.get(groupId);
-  if (latest.windowId !== windowId || latest.title !== target.title) throw new Error('目标分组已变化，请重新整理');
+  if (latest.windowId !== windowId || latest.title !== target.title) throw new AppError('messages.the_target_group_has_changed_start_a_new_task');
   signal?.throwIfAborted();
   if (!valid.length) return [];
   await chrome.tabs.group({ groupId, tabIds: valid.map(t => t.id) as [number, ...number[]] });
@@ -33,23 +35,23 @@ export async function joinExisting(tabs: TabSnapshot[], groupId: number, write: 
 }
 export async function createNative(tabs: TabSnapshot[], category: Pick<Category, 'name' | 'description' | 'color'>, minimum: number, write: WriteRecords, signal?: AbortSignal, validate?: () => Promise<void>) {
   if (!tabs.length || new Set(tabs.map(t => t.windowId)).size !== 1 || tabs.some(t => t.groupId !== -1) || new Set(tabs.map(t => t.id)).size !== tabs.length)
-    throw new Error('请选择同窗口未分组标签');
+    throw new AppError('messages.choose_ungrouped_tabs_in_this_window');
   const windowId = tabs[0].windowId;
   await normalWindow(windowId);
   let valid = await validTabs(tabs);
-  if (valid.length < minimum) return { ids: [] as number[], groupId: undefined, warning: `有效成员少于 ${minimum} 个，保持未分组` };
+  if (valid.length < minimum) return { ids: [] as number[], groupId: undefined, warning: msg('task.fewerMembers', { minimum }) };
   await write(valid.map(tab => ({ tab, targetGroupId: -1, applied: false })));
   await validate?.();
   valid = await validTabs(valid);
   signal?.throwIfAborted();
-  if (valid.length < minimum) return { ids: [] as number[], groupId: undefined, warning: `有效成员少于 ${minimum} 个，保持未分组` };
+  if (valid.length < minimum) return { ids: [] as number[], groupId: undefined, warning: msg('task.fewerMembers', { minimum }) };
   const groupId = await chrome.tabs.group({ createProperties: { windowId }, tabIds: valid.map(t => t.id) as [number, ...number[]] });
   await write(valid.map(tab => ({ tab, targetGroupId: groupId, applied: true })));
-  let warning: string | undefined;
+  let warning: UserMessage | undefined;
   try {
     await chrome.tabGroups.update(groupId, { title: category.name, color: category.color });
     await attachProfile(groupId, windowId, { ...category, source: minimum === 1 ? 'user' : 'generated' });
-  } catch { warning = '标签已归组，但名称、颜色或说明保存失败，请在分组编辑中检查'; }
+  } catch { warning = msg('task.groupSaveFailed'); }
   return { ids: valid.map(t => t.id), groupId, warning };
 }
 export function journalWriter(journal: Journal, after?: (records: Mutation[]) => Promise<void>): WriteRecords {
@@ -63,10 +65,10 @@ export function journalWriter(journal: Journal, after?: (records: Mutation[]) =>
 }
 export async function moveManually(tab: TabSnapshot, groupId: number, write: WriteRecords) {
   await normalWindow(tab.windowId);
-  if (!unchanged(await chrome.tabs.get(tab.id), tab)) throw new Error('标签已变化，请重新选择');
+  if (!unchanged(await chrome.tabs.get(tab.id), tab)) throw new AppError('messages.the_tab_has_changed_select_it_again');
   if (tab.groupId === groupId) return;
   const target = await chrome.tabGroups.get(groupId);
-  if (target.windowId !== tab.windowId) throw new Error('只能改分到当前窗口');
+  if (target.windowId !== tab.windowId) throw new AppError('messages.choose_a_group_in_the_current_window');
   let originalGroup: OriginalGroup | undefined;
   if (tab.groupId !== -1) {
     const original = await chrome.tabGroups.get(tab.groupId);
@@ -76,9 +78,9 @@ export async function moveManually(tab: TabSnapshot, groupId: number, write: Wri
   }
   const record: Mutation = { tab, targetGroupId: groupId, applied: false, originalGroup };
   await write([record]);
-  if (!unchanged(await chrome.tabs.get(tab.id), tab)) throw new Error('标签已变化，请重新选择');
+  if (!unchanged(await chrome.tabs.get(tab.id), tab)) throw new AppError('messages.the_tab_has_changed_select_it_again');
   const latest = await chrome.tabGroups.get(groupId);
-  if (latest.windowId !== tab.windowId || latest.title !== target.title) throw new Error('目标分组已变化');
+  if (latest.windowId !== tab.windowId || latest.title !== target.title) throw new AppError('messages.the_target_group_has_changed');
   await chrome.tabs.group({ groupId, tabIds: [tab.id] });
   if (originalGroup) originalGroup.removedByOperation = !!originalGroup.removedByOperation
     && !(await chrome.tabGroups.get(originalGroup.id).catch(() => null));
@@ -86,8 +88,8 @@ export async function moveManually(tab: TabSnapshot, groupId: number, write: Wri
 }
 export async function undoLatest() {
   const journal = await readJournal();
-  if (!journal) throw new Error('没有可撤销的成员变更');
-  if (journal.sessionId !== await sessionId()) throw new Error('上次浏览器会话的操作不能撤销');
+  if (!journal) throw new AppError('messages.there_are_no_grouping_changes_to_undo');
+  if (journal.sessionId !== await sessionId()) throw new AppError('messages.changes_from_a_previous_browser_session_cannot_be_undone');
   await normalWindow(journal.windowId);
   let count = 0;
   for (const record of [...journal.records].reverse()) {
@@ -115,7 +117,7 @@ export async function undoLatest() {
     try { await chrome.tabs.move(tab.id!, { index: record.tab.index }); } catch { /* Membership restored; index is best effort. */ }
     count++;
   }
-  journal.message = `已撤销 ${count} 个标签；已关闭或被用户修改的标签保持现状。`;
+  journal.message = msg('undo.finished', { count });
   await commitJournal(journal);
   return journal.message;
 }

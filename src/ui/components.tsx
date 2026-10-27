@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { useUi } from './preferences';
 import { localizeMessage } from './messages';
+import type { UserMessage } from '../i18n';
 
 const paths: Record<string, ReactNode> = {
   settings: <><path d="M4 6h12M4 14h12"/><circle cx="7" cy="6" r="2"/><circle cx="13" cy="14" r="2"/></>,
@@ -63,12 +64,12 @@ export function Modal({ title, onClose, children, footer, busy = false }: {
     if (event.shiftKey && (document.activeElement === first || document.activeElement === ref.current)) { event.preventDefault(); last?.focus(); }
     else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
   }}>
-    <div className="modal-heading"><h2 id={titleId}>{title}</h2><button className="icon-button" type="button" aria-label={t('关闭', 'Close')} disabled={busy} onClick={onClose}><Icon name="close" /></button></div>
+    <div className="modal-heading"><h2 id={titleId}>{title}</h2><button className="icon-button" type="button" aria-label={t('ui.close')} disabled={busy} onClick={onClose}><Icon name="close" /></button></div>
     <div className="modal-content">{children}</div>
     {footer && <div className="modal-footer">{footer}</div>}
   </dialog>;
 }
-type ConfirmOptions = { title: string; message: string; confirmLabel?: string; danger?: boolean };
+type ConfirmOptions = { title: UserMessage; message: UserMessage; confirmLabel?: UserMessage; danger?: boolean };
 export function useConfirm() {
   const { t, locale } = useUi();
   const [question, setQuestion] = useState<ConfirmOptions>();
@@ -78,6 +79,6 @@ export function useConfirm() {
   const confirm = useCallback((options: ConfirmOptions) => new Promise<boolean>(resolve => {
     resolver.current?.(false); resolver.current = resolve; setQuestion(options);
   }), []);
-  const confirmation = question ? <Modal title={localizeMessage(question.title, locale)} onClose={() => settle(false)} footer={<><button type="button" onClick={() => settle(false)}>{t('取消', 'Cancel')}</button><button type="button" className={question.danger ? 'danger-button' : 'primary'} onClick={() => settle(true)}>{question.confirmLabel ? localizeMessage(question.confirmLabel, locale) : t('确认', 'Confirm')}</button></>}><p className="confirm-message">{localizeMessage(question.message, locale)}</p></Modal> : null;
+  const confirmation = question ? <Modal title={localizeMessage(question.title, locale)} onClose={() => settle(false)} footer={<><button type="button" onClick={() => settle(false)}>{t('ui.cancel')}</button><button type="button" className={question.danger ? 'danger-button' : 'primary'} onClick={() => settle(true)}>{question.confirmLabel ? localizeMessage(question.confirmLabel, locale) : t('ui.confirm')}</button></>}><p className="confirm-message">{localizeMessage(question.message, locale)}</p></Modal> : null;
   return { confirm, confirmation };
 }

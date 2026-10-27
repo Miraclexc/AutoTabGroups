@@ -1,7 +1,6 @@
-import { stageLabels, type OrganizeTask } from '../shared/organizer';
+import type { OrganizeTask } from '../shared/organizer';
 import { Icon } from './components';
 import { useUi } from './preferences';
-import { localizeMessage } from './messages';
 import './task-progress.css';
 
 // Counts describe the current pass, not elapsed time or an estimated total percentage.
@@ -27,33 +26,33 @@ export function taskProgress(task: OrganizeTask) {
 }
 
 export function TaskProgress({ task, disabled, onCancel }: { task: OrganizeTask; disabled?: boolean; onCancel: () => void }) {
-  const { t, locale } = useUi();
+  const { t } = useUi();
   const data = taskProgress(task);
   const remaining = task.items.filter(item => ['unmatched', 'uncertain'].includes(item.status)).length;
-  const phase = localizeMessage(stageLabels[task.stage], locale);
+  const phase = t(`stage.${task.stage}`);
   const hint = task.stage === 'prepare'
-    ? t('正在检查已有分组，并补充需要的分组说明。', 'Checking existing groups and preparing missing descriptions.')
+    ? t('ui.checking_existing_groups_and_preparing_missing_descriptions')
     : task.stage === 'plan'
-      ? t(`正在分析 ${remaining} 个剩余网页，等待模型返回分组方案。`, `Analyzing ${remaining} remaining pages; waiting for the model’s plan.`)
+      ? t('progress.remaining', { count: remaining })
       : data.applying
-        ? t('正在应用分组，并核对页面的最新状态。', 'Applying groups and checking the latest tab state.')
-        : t('逐页读取并判断；较慢的模型请求可能需要等待。', 'Reading and evaluating pages; model requests may take a moment.');
-  return <section className="organizer-progress" aria-label={t('整理进度', 'Organizing progress')}>
+        ? t('ui.applying_groups_and_checking_the_latest_tab_state')
+        : t('ui.reading_and_evaluating_pages_model_requests_may_take_a');
+  return <section className="organizer-progress" aria-label={t('ui.organizing_progress')}>
     <div className="organizer-progress-heading">
       <div className="organizer-progress-title" role="status" aria-live="polite"><strong>{phase}</strong></div>
-      <button type="button" className="organizer-progress-cancel" disabled={disabled} onClick={onCancel}>{t('取消任务', 'Cancel task')}</button>
+      <button type="button" className="organizer-progress-cancel" disabled={disabled} onClick={onCancel}>{t('ui.cancel_task')}</button>
     </div>
-    <div className="organizer-progress-count" aria-live="polite"><span>{t('本阶段进度', 'Stage progress')}</span><strong>{data.total === undefined ? t('处理中', 'Working') : `${data.completed} / ${data.total}`}</strong></div>
-    <progress aria-label={`${phase} · ${t('本阶段进度', 'Stage progress')}`} value={data.total === undefined ? undefined : data.completed} max={data.total || 1} />
+    <div className="organizer-progress-count" aria-live="polite"><span>{t('ui.stage_progress')}</span><strong>{data.total === undefined ? t('ui.working_3') : `${data.completed} / ${data.total}`}</strong></div>
+    <progress aria-label={`${phase} · ${t('ui.stage_progress')}`} value={data.total === undefined ? undefined : data.completed} max={data.total || 1} />
     <p className="organizer-progress-hint">{hint}</p>
-    {data.current && <div className="organizer-progress-current"><Icon name="file" size={16} /><div><small>{data.applying ? t('正在归组', 'Grouping') : t('正在判断', 'Evaluating')}</small><p title={data.current.tab.title || data.current.tab.url}>{data.current.tab.title || data.current.tab.url}</p></div></div>}
+    {data.current && <div className="organizer-progress-current"><Icon name="file" size={16} /><div><small>{data.applying ? t('ui.grouping') : t('ui.evaluating')}</small><p title={data.current.tab.title || data.current.tab.url}>{data.current.tab.title || data.current.tab.url}</p></div></div>}
     <div className="organizer-progress-stats">
-      <span><strong>{task.items.length}</strong>{t('本次网页', 'Total pages')}</span>
-      <span className="grouped"><strong>{data.grouped}</strong>{t('已归组', 'Grouped')}</span>
-      <span className={data.failed ? 'failed' : ''}><strong>{data.failed}</strong>{t('失败', 'Failed')}</span>
+      <span><strong>{task.items.length}</strong>{t('ui.total_pages')}</span>
+      <span className="grouped"><strong>{data.grouped}</strong>{t('ui.grouped_2')}</span>
+      <span className={data.failed ? 'failed' : ''}><strong>{data.failed}</strong>{t('ui.failed')}</span>
     </div>
     <div className="organizer-progress-pages" aria-hidden="true">{task.items.slice(0, 60).map(item => <span key={item.tab.id} className={`page-${item.status}${item.tab.id === data.current?.tab.id ? ' current' : ''}`} title={item.tab.title || item.tab.url} />)}{task.items.length > 60 && <small>+{task.items.length - 60}</small>}</div>
-    <div className="organizer-progress-legend"><span><i className="waiting" />{t('等待', 'Waiting')}</span><span><i className="active" />{t('处理中', 'Working')}</span><span><i className="evaluated" />{t('已处理', 'Processed')}</span><span><i className="grouped" />{t('已归组', 'Grouped')}</span><span><i className="failed" />{t('失败', 'Failed')}</span></div>
+    <div className="organizer-progress-legend"><span><i className="waiting" />{t('ui.waiting')}</span><span><i className="active" />{t('ui.working_3')}</span><span><i className="evaluated" />{t('ui.processed')}</span><span><i className="grouped" />{t('ui.grouped_2')}</span><span><i className="failed" />{t('ui.failed')}</span></div>
   </section>;
 }
 

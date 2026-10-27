@@ -1,14 +1,13 @@
 import { z } from 'zod';
 import { colors, settingsSchema, type Category, type Settings, type TabSnapshot, type TaskItem } from './schemas';
-import { uiPreferencesPatchSchema } from './ui-preferences';
+import { uiPreferencesPatchSchema, type UiPreferences } from './ui-preferences';
+import type { UserMessage } from '../i18n';
+import { AppError } from './errors';
 
 export const actionNames = ['organize-current', 'organize-window', 'organize-window-with-new'] as const;
 export const organizeActionSchema = z.enum(actionNames);
 export const ORGANIZER_STATE_CHANGED = 'organizer-state-changed';
 export type OrganizeAction = z.infer<typeof organizeActionSchema>;
-export const actionLabels: Record<OrganizeAction, string> = {
-  'organize-current': '整理当前页', 'organize-window': '更新分组', 'organize-window-with-new': '更新并允许新建分组',
-};
 export const profileSchema = z.object({
   id: z.string().min(1), name: z.string(), description: z.string().max(5000),
   color: z.enum(colors), titles: z.array(z.string()).default([]),
@@ -30,24 +29,21 @@ export interface Mutation {
 }
 export interface Journal {
   id: string; sessionId: string; windowId: number; createdAt: number;
-  records: Mutation[]; pending?: boolean; message?: string;
+  records: Mutation[]; pending?: boolean; message?: UserMessage;
 }
 export type Stage = 'prepare' | 'existing' | 'apply-existing' | 'plan' | 'final' | 'apply-final' | 'done';
-export const stageLabels: Record<Stage, string> = {
-  prepare: '准备分组信息', existing: '读取网页并匹配已有组', 'apply-existing': '应用已有组',
-  plan: '分析新组', final: '确认剩余网页归属', 'apply-final': '应用新组方案', done: '处理结束',
-};
 export interface OrganizeItem extends TaskItem { pass?: 'existing' | 'final' }
 export interface OrganizeTask {
-  version: 2; id: string; sessionId: string; windowId: number; action: OrganizeAction;
+  version: 3; id: string; sessionId: string; windowId: number; action: OrganizeAction;
   source: 'sidebar' | 'shortcut' | 'menu' | 'retry';
   status: 'running' | 'completed' | 'partial' | 'cancelled' | 'interrupted' | 'failed';
-  stage: Stage; createdAt: number; message?: string; allowNew: boolean;
+  stage: Stage; createdAt: number; message?: UserMessage; allowNew: boolean;
+  outputLocale: UiPreferences['locale'];
   creationReason?: 'explicit' | 'empty-window'; settings: Settings;
   initialGroups: GroupShape[]; targets: NativeTarget[]; proposals?: Proposal[];
   items: OrganizeItem[]; journal: Mutation[]; bypassCache?: boolean;
 }
-export interface Diagnostic { action: string; source: string; at: number; windowId?: number; executed: boolean; message: string }
+export interface Diagnostic { action: string; source: string; at: number; windowId?: number; executed: boolean; message: UserMessage }
 export interface OrganizerState {
   settings: Settings; revision: number; groups: GroupView[]; tabs: (TabSnapshot & { pinned: boolean; eligible: boolean; active: boolean })[];
   task: OrganizeTask | null; journal: Journal | null; diagnostic: Diagnostic | null;
@@ -79,6 +75,10 @@ export const organizerCommandSchema = z.discriminatedUnion('type', [
 export type OrganizerCommand = z.infer<typeof organizerCommandSchema>;
 export async function dispatch<T = void>(command: OrganizerCommand): Promise<T> {
   const response = await chrome.runtime.sendMessage(command);
-  if (!response?.ok) throw new Error(response?.error || '后台没有响应，请重试');
+  if (!response?.ok) {
+    if (response?.error && typeof response.error === 'object') throw new AppError(response.error.code, response.error.params);
+    if (response?.error) throw new Error(response.error);
+    throw new AppError('messages.the_background_service_did_not_respond_please_retry');
+  }
   return response.data as T;
 }

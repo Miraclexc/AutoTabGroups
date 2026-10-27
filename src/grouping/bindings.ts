@@ -1,3 +1,4 @@
+import { AppError } from '../shared/errors';
 import { z } from 'zod';
 import type { ApplyRecord, Binding, Category, TabSnapshot } from '../shared/schemas';
 import { readBindings, readConfig, writeBindings, writeConfig } from '../storage/repository';
@@ -98,8 +99,8 @@ export function adoptGroup(categoryId: string, groupId: number) {
   return exclusive(async () => {
     const group = await chrome.tabGroups.get(groupId);
     const window = await chrome.windows.get(group.windowId);
-    if (window.incognito || window.type !== 'normal') throw new Error('只能接管普通窗口中的分组');
-    if (!(await readConfig()).categories.some(category => category.id === categoryId)) throw new Error('分类不存在');
+    if (window.incognito || window.type !== 'normal') throw new AppError('group.normal');
+    if (!(await readConfig()).categories.some(category => category.id === categoryId)) throw new AppError('group.missing');
     const bindings = (await readBindings()).filter(binding => binding.groupId !== group.id && !(binding.categoryId === categoryId && binding.windowId === group.windowId));
     bindings.push({ categoryId, windowId: group.windowId, groupId: group.id });
     await writeBindings(bindings);
@@ -111,10 +112,10 @@ export function applyToCategory(tab: TabSnapshot, category: Category, journal: (
   return exclusive(async () => {
     const current = await synchronizeUnlocked();
     if (current.blocked.has(slot({ categoryId: category.id, windowId: tab.windowId })))
-      throw new Error('现有分组名称与多个分类关联，请在“接管现有 Chrome 分组”中指定归属后重试');
+      throw new AppError('group.ambiguousName');
     const binding = await applyGroup(tab, category, current.bindings, journal, chromeGroups, async () => {
       const latest = await synchronizeUnlocked();
-      if (latest.blocked.has(slot({ categoryId: category.id, windowId: tab.windowId }))) throw new Error('分组关联有歧义，请手动接管后重试');
+      if (latest.blocked.has(slot({ categoryId: category.id, windowId: tab.windowId }))) throw new AppError('group.ambiguous');
       return latest.bindings.find(binding => binding.categoryId === category.id && binding.windowId === tab.windowId)?.groupId;
     });
     const bindings = (await readBindings()).filter(existing => existing.groupId !== binding.groupId && slot(existing) !== slot(binding));
@@ -141,10 +142,10 @@ export function applyCategoryBatch(tabs: TabSnapshot[], category: Category, jour
     if (!tabs.length) return results;
     const windowId = tabs[0].windowId;
     if (tabs.some(tab => tab.windowId !== windowId) || new Set(tabs.map(tab => tab.id)).size !== tabs.length)
-      throw new Error('同一批归组必须来自同一窗口且标签不能重复');
+      throw new AppError('group.batch');
     const target = async () => {
       const current = await synchronizeUnlocked();
-      if (current.blocked.has(slot({ categoryId: category.id, windowId }))) throw new Error('分组关联有歧义，请手动接管后重试');
+      if (current.blocked.has(slot({ categoryId: category.id, windowId }))) throw new AppError('group.ambiguous');
       return current.bindings.find(binding => binding.categoryId === category.id && binding.windowId === windowId)?.groupId;
     };
     const stillEligible = async (candidates: TabSnapshot[]) => {
@@ -169,7 +170,7 @@ export function applyCategoryBatch(tabs: TabSnapshot[], category: Category, jour
     if (tooSmall(candidates, groupId)) return results;
     await journal(candidates.map(tab => ({ tab, targetGroupId: groupId ?? -1, applied: false })));
     const latest = await target();
-    if (groupId !== undefined && groupId !== latest) throw new Error('目标分组已改变，请重新更新分组');
+    if (groupId !== undefined && groupId !== latest) throw new AppError('group.changed');
     if (latest !== groupId) {
       groupId = latest;
       await journal(candidates.map(tab => ({ tab, targetGroupId: groupId ?? -1, applied: false })));

@@ -1,3 +1,4 @@
+import { AppError } from '../shared/errors';
 import type { ApplyRecord, Binding, Category, TabSnapshot } from '../shared/schemas';
 import { unchanged } from '../browser/tabs';
 
@@ -17,26 +18,26 @@ export const chromeGroups: GroupPort = {
 };
 
 export async function applyGroup(tab: TabSnapshot, category: Category, bindings: Binding[], journal: (record: ApplyRecord) => Promise<void>, port = chromeGroups, refreshTarget?: () => Promise<number | undefined>): Promise<Binding & { warning?: string }> {
-  if (!unchanged(await port.getTab(tab.id), tab)) throw new Error('标签已被修改，跳过本次分组');
+  if (!unchanged(await port.getTab(tab.id), tab)) throw new AppError('tab.modified');
   let groupId = bindings.find(binding => binding.categoryId === category.id && binding.windowId === tab.windowId)?.groupId;
   if (groupId !== undefined) {
     // Never fall back to creation after a concurrent deletion/move. A fresh
     // update will reconcile any replacement group before trying again.
     try { if ((await port.getGroup(groupId)).windowId !== tab.windowId) throw new Error('moved'); }
-    catch { throw new Error('目标分组已删除或移动，请重新更新分组'); }
+    catch { throw new AppError('group.removed'); }
   }
   // A write-ahead record lets recovery identify a partially applied item.
   await journal({ tab, targetGroupId: groupId ?? -1, applied: false });
   if (refreshTarget) {
     const latest = await refreshTarget();
-    if (groupId !== undefined && latest !== groupId) throw new Error('目标分组已改变，请重新更新分组');
+    if (groupId !== undefined && latest !== groupId) throw new AppError('group.changed');
     if (latest !== groupId) {
       groupId = latest;
       await journal({ tab, targetGroupId: groupId ?? -1, applied: false });
     }
   }
   // Recheck after asynchronous storage/group lookups, immediately before mutation.
-  if (!unchanged(await port.getTab(tab.id), tab)) throw new Error('标签已被修改，跳过本次分组');
+  if (!unchanged(await port.getTab(tab.id), tab)) throw new AppError('tab.modified');
   const created = groupId === undefined;
   groupId = await port.group(tab.id, groupId, tab.windowId);
   await journal({ tab, targetGroupId: groupId, applied: true });

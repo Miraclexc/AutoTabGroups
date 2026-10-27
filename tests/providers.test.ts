@@ -17,7 +17,7 @@ describe('generator adapters (mock HTTP only)', () => {
     const body = JSON.parse(request.body as string);
     expect(body.messages[1].content).toContain(page.title);
     expect(body.messages[1].content).not.toContain('content');
-    expect(body.messages[0].content).toContain('不要总结单个网页');
+    expect(body.messages[0].content).toContain('Do not summarize individual pages');
     expect(request.headers).toMatchObject({ Authorization: 'Bearer fake-key' });
   });
   it('sends Anthropic protocol to a custom URL', async () => {

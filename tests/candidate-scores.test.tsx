@@ -2,9 +2,9 @@ import { describe, expect, it, vi } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { topCandidates } from '../src/grouping/decision-policy';
 import { CandidateScores } from '../src/ui/CandidateScores';
-import { ResultMetrics, statusLabels } from '../src/ui/ResultMetrics';
-import { readTask, writeTask } from '../src/storage/repository';
-import type { Classification, TaskRecord } from '../src/shared/schemas';
+import { readOrganizerTask as readTask, writeOrganizerTask as writeTask } from '../src/storage/workspace';
+import type { OrganizeTask } from '../src/shared/organizer';
+import type { Classification } from '../src/shared/schemas';
 import { category, settings, tab } from './fixtures';
 
 const categories = ['A', 'B', 'C', 'D'].map(id => ({ ...category, id, name: `分类${id}` }));
@@ -22,13 +22,13 @@ describe('top three group scores', () => {
     expect(topCandidates({ ...answer, probabilities: { A: 0.1, B: 0.1 } }, categories).map(item => item.categoryId)).toEqual(['A', 'B']);
     expect(topCandidates(answer, [])).toEqual([]);
   });
-  it('persists score source and snapshot names across task reloads, allowing older tasks without scores', async () => {
+  it('persists score source and snapshot names across current task reloads', async () => {
     const data: Record<string, unknown> = {};
     vi.stubGlobal('chrome', { storage: { local: {
       get: vi.fn(async (key: string) => ({ [key]: structuredClone(data[key]) })),
       set: vi.fn(async (patch: Record<string, unknown>) => { Object.assign(data, structuredClone(patch)); }),
     } } });
-    const task: TaskRecord = { id: 'task', sessionId: 'session', kind: 'update', status: 'completed', createdAt: 0, settings, categories, undo: [], items: [{ tab, status: 'unmatched', preview: '网页内容摘录', candidates: topCandidates(answer, categories), scoreSource: 'llm_estimate' }] };
+    const task: OrganizeTask = { version: 3, outputLocale: 'zh-CN', id: 'task', sessionId: 'session', action: 'organize-window', windowId: 10, source: 'sidebar', stage: 'done', allowNew: false, initialGroups: [], targets: [], journal: [], status: 'completed', createdAt: 0, settings, items: [{ tab, status: 'unmatched', preview: '网页内容摘录', candidates: topCandidates(answer, categories), scoreSource: 'llm_estimate' }] };
     await writeTask(task);
     const restored = await readTask();
     expect(restored?.items).toEqual(task.items);
@@ -47,7 +47,7 @@ describe('top three group scores', () => {
     const empty = renderToStaticMarkup(<CandidateScores item={{ tab, status: 'failed' }} />);
     expect(empty).toContain('暂无候选分数'); expect(empty).not.toContain('0.00%');
   });
-  it('sorts legacy candidates for display without mutating them and follows group colors with safe fallbacks', () => {
+  it('sorts candidates for display without mutating them and follows group colors with safe fallbacks', () => {
     const candidates = [
       { categoryId: 'A', name: '低分组', score: 0.1 },
       { categoryId: 'B', name: '高分组', score: 0.7, color: 'red' as const },
@@ -61,16 +61,5 @@ describe('top three group scores', () => {
     expect(html).toContain('background-color:purple');
     expect(html).toContain('background-color:grey');
     expect(candidates.map(candidate => candidate.categoryId)).toEqual(['A', 'B', 'C']);
-  });
-  it('combines unmatched and uncertain records into one displayed status and count', () => {
-    const task: TaskRecord = { id: 'task', sessionId: 'session', kind: 'update', status: 'completed', createdAt: 0, settings, categories, undo: [], items: [
-      { tab, status: 'applied' }, { tab, status: 'unmatched' }, { tab, status: 'uncertain' }, { tab, status: 'uncertain' }, { tab, status: 'failed' },
-    ] };
-    const html = renderToStaticMarkup(<ResultMetrics task={task} />);
-    expect(html).toContain('<strong>3</strong><span>未匹配</span>');
-    expect(html).toContain('<strong>1</strong><span>已归组</span>');
-    expect(html).toContain('<strong>1</strong><span>失败</span>');
-    expect(html).not.toContain('待判断');
-    expect(statusLabels.uncertain).toBe(statusLabels.unmatched);
   });
 });

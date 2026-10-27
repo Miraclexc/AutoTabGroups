@@ -2,7 +2,7 @@ node_modules/
 .npm-cache/
 .npm-cache-browser/
 .browser-test/
-output/playwright/
+output/
 .output/
 .wxt/
 coverage/

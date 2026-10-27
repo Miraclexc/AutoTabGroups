@@ -1,15 +1,21 @@
 import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { dispatch } from '../shared/organizer';
 import { readUiPreferences, UI_PREFERENCES_KEY, uiPreferencesSchema, type UiPreferences } from '../shared/ui-preferences';
+import { I18nextProvider, useTranslation } from 'react-i18next';
+import { i18n, translator, type Translate } from '../i18n';
 
 type UiContextValue = UiPreferences & {
   resolvedTheme: 'light' | 'dark';
-  t: (zh: string, en: string) => string;
+  t: Translate;
   savePreferences: (patch: Partial<UiPreferences>) => Promise<boolean>;
   preferenceBusy: boolean; preferenceError: string; preferencesReady: boolean;
 };
 const Context = createContext<UiContextValue | null>(null);
 export function UiProvider({ children }: { children: ReactNode }) {
+  return <I18nextProvider i18n={i18n}><PreferencesProvider>{children}</PreferencesProvider></I18nextProvider>;
+}
+function PreferencesProvider({ children }: { children: ReactNode }) {
+  const { t: translate } = useTranslation(undefined, { useSuspense: false });
   const [preferences, setPreferences] = useState<UiPreferences>({ theme: 'system', locale: 'zh-CN' });
   const [systemDark, setSystemDark] = useState(() => matchMedia('(prefers-color-scheme: dark)').matches);
   const [preferencesReady, setReady] = useState(false);
@@ -40,7 +46,7 @@ export function UiProvider({ children }: { children: ReactNode }) {
     document.documentElement.dataset.theme = resolvedTheme;
     document.documentElement.lang = preferences.locale;
     document.documentElement.style.colorScheme = resolvedTheme;
-    document.title = `AutoTabGroups · ${preferences.locale === 'en' ? 'Tab organizer' : '标签整理'}`;
+    document.title = translator(preferences.locale)('app.title');
   }, [resolvedTheme, preferences.locale]);
   const savePreferences = useCallback(async (patch: Partial<UiPreferences>) => {
     if (saving.current) return false;
@@ -51,9 +57,9 @@ export function UiProvider({ children }: { children: ReactNode }) {
     } catch { setError('save'); return false; }
     finally { saving.current = false; setBusy(false); }
   }, []);
-  const t = useCallback((zh: string, en: string) => preferences.locale === 'en' ? en : zh, [preferences.locale]);
+  const t: Translate = useCallback((key, params) => translate(key, { ...params, lng: preferences.locale }), [preferences.locale, translate]);
   return <Context.Provider value={{ ...preferences, resolvedTheme, t, savePreferences, preferenceBusy, preferencesReady,
-    preferenceError: preferenceError === 'load' ? t('外观偏好读取失败，请刷新重试。', 'Could not load appearance preferences. Refresh to retry.') : preferenceError ? t('偏好保存失败，原设置已保留，请重试。', 'Could not save preferences. Previous settings were kept. Please retry.') : '' }}>{children}</Context.Provider>;
+    preferenceError: preferenceError === 'load' ? t('ui.could_not_load_appearance_preferences_refresh_to_retry') : preferenceError ? t('ui.could_not_save_preferences_previous_settings_were_kept_please') : '' }}>{children}</Context.Provider>;
 }
 export function useUi() {
   const context = useContext(Context);

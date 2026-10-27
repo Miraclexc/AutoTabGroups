@@ -1,3 +1,4 @@
+import { AppError } from '../../shared/errors';
 import type { Settings } from '../../shared/schemas';
 import type { TabClassifier } from '../contracts';
 import type { Fetch } from '../transport';
@@ -8,13 +9,13 @@ export function createLlmClassifier(settings: Settings, apiKey: string, fetcher?
   return {
     async classify(page, categories, signal) {
       const config = settings.classifier;
-      if (!config.model) throw new Error('请先填写分类模型名称');
+      if (!config.model) throw new AppError('model.classifierName');
       const { criteria, ids } = categoryChoices(categories);
-      const system = `${routeInstructions} 不要总结网页，也不要创建新分类。只返回 JSON 对象，格式为 {"choice":"候选键","probabilities":{"每一个候选键":0.0},"confidence":0.0}。probabilities 必须包含所有候选键，各值在 0 到 1 之间，总和为 1；choice 必须是分数最高的候选。confidence 为 0 到 1 的自评把握程度。这些分数仅为自评估计。`;
+      const system = `${routeInstructions} Return only a JSON object in the form {"choice":"candidate_key","probabilities":{"candidate_key":0.0},"confidence":0.0}. Include every supplied candidate key in probabilities, with values between 0 and 1 summing to 1. choice must be the highest-scoring candidate. confidence is a self-assessed value between 0 and 1. These scores are estimates only. Preserve candidate keys exactly; do not translate them.`;
       const text = await requestJsonText(config, apiKey, system, JSON.stringify({ page, choices: criteria }), settings.requestBudget, signal, fetcher);
       let value: unknown;
       try { value = JSON.parse(text.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '')); }
-      catch { throw new Error('分类结果不是有效 JSON，保持未分组'); }
+      catch { throw new AppError('model.classificationJson'); }
       return validateChoice(value, criteria, ids, config.model, 'llm_estimate');
     },
   };

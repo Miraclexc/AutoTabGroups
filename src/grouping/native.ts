@@ -1,3 +1,4 @@
+import { AppError } from '../shared/errors';
 import { snapshot } from '../browser/tabs';
 import { readPage } from '../browser/injection';
 import { ReaderError } from '../extraction/remote';
@@ -5,6 +6,7 @@ import { describeNativeGroup } from '../ai/providers/description';
 import { mutateWorkspace, workspace } from '../storage/workspace';
 import type { GroupProfile, GroupShape, GroupView, NativeTarget } from '../shared/organizer';
 import type { Settings } from '../shared/schemas';
+import type { OutputLocale } from '../ai/prompts/output-language';
 
 interface Link { nativeId: number; profileId: string; windowId: number }
 const LINK_KEY = 'organizer.links.v2';
@@ -12,7 +14,7 @@ let syncQueue: Promise<unknown> = Promise.resolve();
 const normalize = (s: string) => s.normalize('NFC').trim().toLowerCase();
 export async function normalWindow(windowId: number) {
   const win = await chrome.windows.get(windowId);
-  if (win.type !== 'normal' || win.incognito) throw new Error('只能整理普通非无痕窗口');
+  if (win.type !== 'normal' || win.incognito) throw new AppError('messages.only_normal_non_incognito_windows_can_be_organized');
 }
 export function shape(groups: Pick<chrome.tabGroups.TabGroup, 'id' | 'windowId' | 'title'>[]): GroupShape[] {
   return groups.map(g => ({ id: g.id, windowId: g.windowId, title: g.title || '' })).sort((a, b) => a.id - b.id);
@@ -60,7 +62,7 @@ export function syncNativeGroups(windowId: number): Promise<GroupView[]> {
       const profile = config.profiles.find(p => p.id === next.find(l => l.nativeId === group.id)!.profileId)!;
       return {
         id: `g_${group.id}`, nativeId: group.id, windowId, profileId: profile.id,
-        name: group.title || '未命名分组', color: group.color, description: profile.description,
+        name: group.title || '', color: group.color, description: profile.description,
         include: [], exclude: [], source: profile.source, sampleCount: profile.sampleCount,
         members: tabs.filter(t => t.groupId === group.id && t.id !== undefined && t.url).map(snapshot),
       };
@@ -72,7 +74,7 @@ export function syncNativeGroups(windowId: number): Promise<GroupView[]> {
 export async function attachProfile(groupId: number, windowId: number, value: Pick<GroupProfile, 'name' | 'description' | 'color' | 'source'>) {
   // Synchronization may have observed a newly created native group first: update its profile instead of duplicating it.
   const view = (await syncNativeGroups(windowId)).find(g => g.nativeId === groupId);
-  if (!view) throw new Error('分组已关闭');
+  if (!view) throw new AppError('messages.the_group_has_been_closed');
   await mutateWorkspace(current => ({ ...current, profiles: current.profiles.map(p => p.id === view.profileId ? { ...p, ...value } : p) }));
   return view.profileId;
 }
@@ -80,7 +82,7 @@ export function sampleMembers<T>(members: T[], limit = 5): T[] {
   if (members.length <= limit) return members;
   return Array.from({ length: limit }, (_, i) => members[Math.round(i * (members.length - 1) / (limit - 1))]);
 }
-export async function groupDescription(group: GroupView, settings: Settings, apiKey: string, signal?: AbortSignal) {
+export async function groupDescription(group: GroupView, settings: Settings, apiKey: string, signal?: AbortSignal, locale: OutputLocale = 'zh-CN') {
   const pages = [];
   for (const member of sampleMembers([...group.members].sort((a, b) => a.index - b.index))) {
     signal?.throwIfAborted();
@@ -90,25 +92,25 @@ export async function groupDescription(group: GroupView, settings: Settings, api
       // Removed members do not supply stale context.
     }
   }
-  const description = await describeNativeGroup(group.name, pages, settings, apiKey, signal);
+  const description = await describeNativeGroup(group.name, pages, settings, apiKey, signal, locale);
   const latest = await chrome.tabGroups.get(group.nativeId);
-  if (latest.windowId !== group.windowId || (latest.title || '未命名分组') !== group.name) throw new Error('生成说明期间分组已变化，请重试');
+  if (latest.windowId !== group.windowId || (latest.title || '') !== group.name) throw new AppError('messages.the_group_changed_while_generating_its_description_please_retry');
   const members = await chrome.tabs.query({ groupId: group.nativeId });
   const before = group.members.map(t => `${t.id}:${t.url}`).sort().join('\n');
   const after = members.map(t => `${t.id}:${t.url}`).sort().join('\n');
-  if (before !== after) throw new Error('生成说明期间组内网页已变化，请重试');
+  if (before !== after) throw new AppError('messages.group_members_changed_while_generating_the_description_please_retry');
   return { description, sampleCount: pages.length };
 }
-export async function prepareTargets(windowId: number, settings: Settings, apiKey: string, signal?: AbortSignal): Promise<NativeTarget[]> {
+export async function prepareTargets(windowId: number, settings: Settings, apiKey: string, signal?: AbortSignal, locale: OutputLocale = 'zh-CN'): Promise<NativeTarget[]> {
   const groups = await syncNativeGroups(windowId);
   for (const group of groups) {
     signal?.throwIfAborted();
     if (group.description.trim()) continue;
-    const result = await groupDescription(group, settings, apiKey, signal);
+    const result = await groupDescription(group, settings, apiKey, signal, locale);
     signal?.throwIfAborted();
     await mutateWorkspace(current => ({ ...current, profiles: current.profiles.map(p => {
       if (p.id !== group.profileId) return p;
-      if (p.description.trim()) throw new Error('分组说明已在其他位置修改，请重试');
+      if (p.description.trim()) throw new AppError('messages.the_description_was_edited_elsewhere_please_retry');
       return { ...p, ...result, source: 'generated' };
     }) }));
     group.description = result.description;

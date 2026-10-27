@@ -89,6 +89,10 @@ AutoTabGroups 是一个 Chrome 扩展。通过快捷键、侧栏或右键菜单�
 
 主题和语言即时保存。服务与高级设置共用一份草稿，切换分区后可继续编辑，点击“保存配置”统一生效。
 
+AI 新生成的分组名称、描述等内容使用所选界面语言（中文或 English）。进行中的整理沿用启动时的语言；已有分组和手动填写的文字不会自动翻译。
+
+界面、弹窗与任务状态支持即时切换中英文；Chrome 显示的扩展名称和快捷键说明跟随浏览器语言。最近结果仅保存一次任务，旧格式任务记录不展示或恢复；已有分组、设置和密钥保留。
+
 ## 模型与网页读取
 
 ### 模型服务
@@ -142,32 +146,16 @@ AutoTabGroups 是一个 Chrome 扩展。通过快捷键、侧栏或右键菜单�
 
 ## 从源码构建
 
-开发环境：**Node.js 22.12+、npm 10+**，推荐 Node.js 24。
-
-```sh
-git clone https://github.com/Miraclexc/AutoTabGroups.git
-cd AutoTabGroups
-npm ci
-npm run build
-```
-
-构建后，在 `chrome://extensions` 加载 `.output/chrome-mv3`。
-
-| 命令 | 用途 |
-| --- | --- |
-| `npm run dev` | 启动 WXT 开发构建 |
-| `npm run check` | 运行类型检查、Lint、单元测试与生产构建 |
-| `npm run zip` | 生成插件 ZIP |
-| `npm run mock:server` | 启动本地模型 mock 服务 |
-
-项目基于 React、TypeScript、WXT、Zod 和 Chrome Manifest V3，使用 Readability 提取正文。模型请求与分组操作由扩展后台统一处理，测试通过本地 mock 和隔离浏览器运行。
+开发环境需要 Node.js 22.12+ 和 npm 10+。项目基于 React、TypeScript、WXT 和 Chrome Manifest V3，使用 Readability 提取正文。完整的源码构建、调试、测试和打包步骤见[开发指南](docs/development.md)。
 
 ## 文档与反馈
 
-- [使用指南](docs/user-guide.md)：完整配置步骤、参数与操作说明。
-- [开发与贡献](docs/development.md)：环境、目录结构、调试与贡献方式。
-- [架构说明](docs/architecture.md)：任务编排、模型流程、存储与撤销。
-- [测试与验收](docs/manual-testing.md)：验证方法与覆盖范围。
+- [文档首页](docs/README.md)：面向用户与开发者的完整导航。
+- [使用指南](docs/user-guide.md)：配置、整理、手动纠正、撤销和备份。
+- [模型与分类接口](docs/classifier-backends.md)：后端选择、地址填写、候选分数和协议契约。
+- [常见问题](docs/troubleshooting.md)：未归组、连接、重启和快捷键问题。
+- [架构说明](docs/architecture.md)：模块职责、任务编排、存储和恢复边界。
+- [开发指南](docs/development.md)与[测试指南](docs/testing.md)：环境、代码入口、调试、mock 和浏览器检查方法。
 - [GitHub Issues](https://github.com/Miraclexc/AutoTabGroups/issues)：反馈问题或提出建议，可附 Chrome 版本、扩展版本、操作步骤及脱敏后的错误信息。
 
 ## 许可证

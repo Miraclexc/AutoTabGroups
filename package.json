@@ -4,8 +4,15 @@
   "license": "MIT",
   "private": true,
   "type": "module",
-  "engines": { "node": ">=22.12.0", "npm": ">=10" },
+  "engines": {
+    "node": ">=22.12.0",
+    "npm": ">=10"
+  },
   "scripts": {
+    "i18n:build": "node scripts/build-locales.mjs",
+    "prebuild": "npm run i18n:build",
+    "prezip": "npm run i18n:build",
+    "predev": "npm run i18n:build",
     "dev": "wxt",
     "build": "wxt build",
     "zip": "wxt zip",
@@ -20,8 +27,10 @@
   },
   "dependencies": {
     "@mozilla/readability": "^0.6.0",
+    "i18next": "^26.5.11",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
+    "react-i18next": "^17.1.9",
     "zod": "^4.0.0"
   },
   "devDependencies": {

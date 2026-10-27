@@ -1,7 +1,8 @@
+import { AppError } from '../shared/errors';
 import type { IgnoredTab, Settings, TabSnapshot } from '../shared/schemas';
 
 export function snapshot(tab: chrome.tabs.Tab): TabSnapshot {
-  if (tab.id === undefined) throw new Error('标签信息不可用');
+  if (tab.id === undefined) throw new AppError('tab.unavailable');
   return { id: tab.id, windowId: tab.windowId, url: tab.url || '', title: tab.title || '', groupId: tab.groupId, index: tab.index };
 }
 export function eligible(tab: chrome.tabs.Tab, ignored: IgnoredTab[]): boolean {

@@ -1,0 +1,20 @@
+{
+  "extensionName": {
+    "message": "AutoTabGroups"
+  },
+  "extensionDescription": {
+    "message": "使用网页语义与自定义分类整理 Chrome 标签页。"
+  },
+  "openExtension": {
+    "message": "打开 AutoTabGroups"
+  },
+  "commandCurrent": {
+    "message": "整理当前未分组页面"
+  },
+  "commandWindow": {
+    "message": "更新当前窗口分组（无组时初始化）"
+  },
+  "commandNew": {
+    "message": "更新当前窗口并允许新建分组"
+  }
+}

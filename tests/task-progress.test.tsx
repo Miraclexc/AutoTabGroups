@@ -4,10 +4,10 @@ import { TaskProgress, taskProgress } from '../src/ui/TaskProgress';
 import type { OrganizeTask } from '../src/shared/organizer';
 import { settings, tab } from './fixtures';
 
-vi.mock('../src/ui/preferences', () => ({ useUi: () => ({ locale: 'zh-CN', t: (zh: string) => zh }) }));
+vi.mock('../src/ui/preferences', async () => { const { translator } = await import('../src/i18n'); return { useUi: () => ({ locale: 'zh-CN', t: translator('zh-CN') }) }; });
 
 function task(items: OrganizeTask['items'], stage: OrganizeTask['stage'] = 'existing'): OrganizeTask {
-  return { version: 2, id: 'test', sessionId: 'test', windowId: 10, action: 'organize-window', source: 'sidebar',
+  return { version: 3, outputLocale: 'zh-CN', id: 'test', sessionId: 'test', windowId: 10, action: 'organize-window', source: 'sidebar',
     status: 'running', stage, createdAt: 0, allowNew: true, settings, initialGroups: [], targets: [], journal: [], items };
 }
 

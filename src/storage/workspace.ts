@@ -1,10 +1,12 @@
+import { msg, type UserMessage } from '../i18n';
+import { AppError } from '../shared/errors';
 import { z } from 'zod';
-import { defaultSettings, settingsSchema, type Classification, type Settings } from '../shared/schemas';
+import { defaultSettings, settingsSchema, type Classification } from '../shared/schemas';
 import { profileSchema, workspaceSchema, type Diagnostic, type Journal, type OrganizeTask, type Workspace } from '../shared/organizer';
-import { readConfig, readKeys, readTask, sessionId } from './repository';
+import { readConfig, readKeys, sessionId } from './repository';
 
 const WORKSPACE = 'workspace.v2';
-const TASK = 'organizer.task.v2';
+const TASK = 'organizer.task.v3';
 const UNDO = 'organizer.undo.v2';
 const PENDING = 'organizer.pending.v2';
 export const CACHE = 'organizer.decisions.v2';
@@ -46,7 +48,7 @@ export async function saveConfiguration(settings: Workspace['settings'], revisio
   await workspace();
   return exclusive(async () => {
     const current = workspaceSchema.parse((await chrome.storage.local.get(WORKSPACE))[WORKSPACE]);
-    if (revision !== current.revision) throw new Error('配置已在其他页面更新，请重新载入后再保存；当前输入已保留');
+    if (revision !== current.revision) throw new AppError('messages.settings_were_changed_elsewhere_reload_before_saving_your_input');
     const keys = await readKeys();
     if (generatorKey !== undefined) keys.generator = generatorKey.trim();
     if (classifierKey !== undefined) keys.classifier = classifierKey.trim();
@@ -58,25 +60,13 @@ export async function saveConfiguration(settings: Workspace['settings'], revisio
 }
 export async function readOrganizerTask(): Promise<OrganizeTask | null> {
   const value = (await chrome.storage.local.get(TASK))[TASK] as OrganizeTask | undefined;
-  if (!value) {
-    if ((await chrome.storage.local.get('organizer.legacy-hidden.v2'))['organizer.legacy-hidden.v2']) return null;
-    const legacy = await readTask();
-    if (!legacy) return null;
-    return {
-      version: 2, id: `legacy:${legacy.id}`, sessionId: 'legacy-read-only', windowId: legacy.items[0]?.tab.windowId ?? -1,
-      action: 'organize-window', source: 'sidebar', createdAt: legacy.createdAt,
-      status: legacy.status === 'running' ? 'interrupted' : legacy.status,
-      stage: 'done', allowNew: false, settings: legacy.settings, initialGroups: [], targets: [],
-      items: legacy.items, journal: [], message: `旧版本${legacy.kind === 'generate' ? '分类草案' : '整理'}记录（只读）：${legacy.message || legacy.status}`,
-    };
-  }
-  if (value.version !== 2 || !Array.isArray(value.items) || !Array.isArray(value.journal)) throw new Error('任务记录损坏，请在配置页清除最近任务详情');
+  if (!value) return null;
+  if (value.version !== 3 || !['zh-CN', 'en'].includes(value.outputLocale) || !Array.isArray(value.items) || !Array.isArray(value.journal)) throw new AppError('messages.the_task_record_is_invalid_clear_recent_task_details');
   return { ...value, ...(value.settings ? { settings: settingsSchema.parse(value.settings) } : {}) };
 }
 export async function writeOrganizerTask(task: OrganizeTask) { await chrome.storage.local.set({ [TASK]: task }); }
 export async function clearOrganizerTask() {
   await chrome.storage.local.remove(TASK);
-  await chrome.storage.local.set({ 'organizer.legacy-hidden.v2': true });
 }
 export async function readJournal(): Promise<Journal | null> {
   return (await chrome.storage.local.get(UNDO))[UNDO] as Journal || null;
@@ -89,8 +79,8 @@ export async function commitJournal(journal: Journal) {
 export async function pendingJournal(): Promise<Journal | null> { return (await chrome.storage.local.get(PENDING))[PENDING] as Journal || null; }
 export async function clearPending() { await chrome.storage.local.remove(PENDING); }
 export async function diagnostic(value?: Diagnostic): Promise<Diagnostic | null> {
-  if (value) await chrome.storage.local.set({ 'organizer.diagnostic.v2': value });
-  return (await chrome.storage.local.get('organizer.diagnostic.v2'))['organizer.diagnostic.v2'] as Diagnostic || null;
+  if (value) await chrome.storage.local.set({ 'organizer.diagnostic.v3': value });
+  return (await chrome.storage.local.get('organizer.diagnostic.v3'))['organizer.diagnostic.v3'] as Diagnostic || null;
 }
 const cachedAnswer = z.object({
   at: z.number(), answer: z.object({ choice: z.string(), confidence: z.number(), model: z.string(),
@@ -114,26 +104,26 @@ export async function exportConfig() {
 }
 export async function previewImport(input: unknown) {
   const data = backupSchema.parse(input);
-  if (new Set(data.profiles.map(p => p.id)).size !== data.profiles.length) throw new Error('说明 ID 重复');
+  if (new Set(data.profiles.map(p => p.id)).size !== data.profiles.length) throw new AppError('messages.the_file_contains_duplicate_description_ids');
   const current = await workspace();
-  const changes: string[] = [];
-  const labels: Record<string, string> = { generator: '标准 Chat 服务', classifier: '归组判断服务', classifierUseChat: '复用标准 Chat', readContent: '正文读取', reader: '正文读取服务', minProbability: '最低分数', minMargin: '候选分差', maxContentChars: '正文长度', requestBudget: '输入预算', maxGroups: '新组数量上限' };
-  for (const key of Object.keys(labels) as (keyof Settings)[]) {
+  const changes: UserMessage[] = [];
+  const fields = ['generator', 'classifier', 'classifierUseChat', 'readContent', 'reader', 'minProbability', 'minMargin', 'maxContentChars', 'requestBudget', 'maxGroups'] as const;
+  for (const key of fields) {
     if (JSON.stringify(current.settings[key]) !== JSON.stringify(data.settings[key]))
-      changes.push(`${labels[key]}：${JSON.stringify(current.settings[key])} → ${JSON.stringify(data.settings[key])}`);
+      changes.push(msg(`import.setting.${key}`, { before: JSON.stringify(current.settings[key]), after: JSON.stringify(data.settings[key]) }));
   }
   for (const profile of data.profiles) {
     const previous = current.profiles.find(p => p.id === profile.id);
     if (!previous || JSON.stringify(previous) !== JSON.stringify(profile))
-      changes.push(`${previous ? '更新' : '新增'}说明「${profile.name}」：${profile.description || '（未填写）'}`);
+      changes.push(msg(previous ? 'import.update' : 'import.add', { name: profile.name, description: profile.description || msg('import.empty') }));
   }
-  if (!changes.length) changes.push('配置与说明没有变化。');
-  return { data, revision: current.revision, changes, profileCount: data.profiles.length, message: '将应用以下差异；不导入密钥、不移动标签。' };
+  if (!changes.length) changes.push(msg('messages.settings_and_descriptions_are_unchanged'));
+  return { data, revision: current.revision, changes, profileCount: data.profiles.length, message: msg('messages.the_following_changes_will_be_applied_keys_are_not') };
 }
 export async function importConfig(input: unknown, revision: number) {
   const { data } = await previewImport(input);
   await mutateWorkspace(current => {
-    if (current.revision !== revision) throw new Error('配置已变化，请重新预览导入');
+    if (current.revision !== revision) throw new AppError('messages.settings_changed_preview_the_import_again');
     const profiles = new Map(current.profiles.map(p => [p.id, p]));
     data.profiles.forEach(p => profiles.set(p.id, p));
     return { ...current, settings: { ...data.settings, scope: 'current' }, profiles: [...profiles.values()] };

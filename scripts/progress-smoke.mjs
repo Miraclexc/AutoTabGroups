@@ -58,6 +58,11 @@ try {
   const windowId = await ui.evaluate(async () => (await chrome.windows.getCurrent()).id);
   const state = () => rpc({ type: 'workspace-state', windowId });
   const initial = await state();
+  const native = await ui.evaluate(() => ({ manifest: chrome.runtime.getManifest(), name: chrome.i18n.getMessage('extensionName'), description: chrome.i18n.getMessage('extensionDescription') }));
+  assert.equal(native.manifest.default_locale, 'zh_CN');
+  assert.equal(native.manifest.name, native.name);
+  assert.equal(native.manifest.description, native.description);
+  assert(!JSON.stringify(native).includes('__MSG_'), 'Chrome must resolve the bundled native locale');
   await rpc({ type: 'save-config', revision: initial.revision, settings: { ...initial.settings, classifierUseChat: true,
     generator: { ...initial.settings.generator, baseUrl: `${base}/v1`, model: 'mock-chat' } } });
   for (let i = 0; i < 4; i++) { const page = await context.newPage(); await page.goto(`${base}/page/chrome-${i}`); }
@@ -85,6 +90,10 @@ try {
   hold = false; for (const release of pending) release();
   const finished = await poll(state, value => value.task?.status !== 'running' && !value.busy);
   assert.equal(finished.task.items.filter(item => item.status === 'applied').length, 4);
+  assert.equal(finished.task.version, 3);
+  assert.equal(finished.task.outputLocale, 'zh-CN', 'Changing UI language must not change a running task output language');
+  assert.equal(finished.task.message.code, 'task.finished');
+  assert(finished.task.items.every(item => item.message.code === 'task.joined'), 'Persist structured messages for language switching');
   assert.equal(finished.groups.length, 1);
   await progress.waitFor({ state: 'hidden' });
   // Start a new uncached classification, then cancel using the visible progress control.
@@ -97,7 +106,7 @@ try {
   assert.equal(cancelled.groups.length, 1);
   await progress.waitFor({ state: 'hidden' });
   assert.deepEqual(errors, []);
-  console.log('PASS progress: indeterminate planning, per-page counts, current page, no stage diagram, 320px dark English, native grouping, cancel. Models use local mocks only.');
+  console.log('PASS progress: native locales, structured task messages, fixed task output language, indeterminate planning, per-page counts, current page, no stage diagram, 320px dark English, native grouping, cancel. Models use local mocks only.');
 } finally {
   hold = false; for (const release of pending) release();
   await context?.close(); server.closeAllConnections(); await new Promise(resolve => server.close(resolve));

@@ -3,7 +3,7 @@ import { createGenerator } from '../src/ai/providers/generator';
 import { createClassifier } from '../src/ai/providers/jev';
 import { thinkingCapabilities, thinkingParameters } from '../src/ai/thinking';
 import { defaultSettings, settingsSchema, type Settings } from '../src/shared/schemas';
-import { readConfig, readKeys, readTask } from '../src/storage/repository';
+import { readConfig, readKeys } from '../src/storage/repository';
 import { category, draft, jevReply, page, settings } from './fixtures';
 
 type Config = Settings['generator'];
@@ -14,19 +14,17 @@ const chatReply = { choices: [{ message: { content: JSON.stringify({ groups: [dr
 const claudeReply = { content: [{ type: 'thinking', thinking: 'MOCK_PRIVATE_REASONING' }, { type: 'text', text: JSON.stringify({ groups: [draft] }) }], stop_reason: 'end_turn' };
 
 describe('thinking defaults and settings migration', () => {
-  it('defaults old config and task snapshots to off without modifying categories or keys', async () => {
+  it('defaults old config to off without modifying categories or keys', async () => {
     const legacy = { ...settings, generator: { model: 'gpt-5.2', baseUrl: settings.generator.baseUrl, protocol: 'openai' } };
     const data: Record<string, unknown> = {
       'config.v1': { settings: legacy, categories: [category] },
       'credentials.v1': { generator: 'mock-key', classifier: 'mock-jev-key' },
-      'task.v1': { id: 'old', sessionId: 'old', kind: 'generate', status: 'interrupted', createdAt: 0, items: [], undo: [], settings: legacy, categories: [category] },
     };
     vi.stubGlobal('chrome', { storage: { local: { get: vi.fn(async (key: string) => ({ [key]: data[key] })) } } });
     expect(defaultSettings.generator.thinkingEffort).toBe('off');
     const migrated = await readConfig();
     expect(migrated.settings.generator).toMatchObject({ thinkingEffort: 'off', thinkingAdapter: 'auto' });
     expect(migrated.categories).toEqual([category]);
-    expect((await readTask())?.settings.generator.thinkingEffort).toBe('off');
     expect(await readKeys()).toEqual({ generator: 'mock-key', classifier: 'mock-jev-key', tavily: '', deepseek: '' });
     expect(data['credentials.v1']).toEqual({ generator: 'mock-key', classifier: 'mock-jev-key' });
   });

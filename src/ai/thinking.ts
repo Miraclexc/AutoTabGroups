@@ -1,16 +1,10 @@
+import { AppError } from '../shared/errors';
+import type { TranslationKey } from '../i18n';
 import type { Settings } from '../shared/schemas';
 
 type Generator = Settings['generator'];
 type Effort = Generator['thinkingEffort'];
 type Adapter = Exclude<Generator['thinkingAdapter'], 'auto'>;
-export const effortLabels: Record<Effort, string> = {
-  off: '关闭（默认）', on: '开启（模型默认强度）', minimal: '极低', low: '低', medium: '中', high: '高', xhigh: '极高', max: '最高',
-};
-export const adapterLabels: Record<Generator['thinkingAdapter'], string> = {
-  auto: '自动识别', openai: 'GPT / OpenAI reasoning_effort',
-  'claude-adaptive': 'Claude 自适应思考（4.6 及更新）', 'claude-budget': 'Claude 思考预算（3.7 / 4 / 4.5）',
-  deepseek: 'DeepSeek', glm: 'GLM', kimi: 'Kimi', qwen: '通义千问', 'non-reasoning': '普通非推理模型（不发送思考参数）',
-};
 const legacyClaude = (model: string) => /claude-(?:3[.-]7|(?:sonnet|opus|haiku)-4(?:[.-][15])?(?:-\d{8})?$|(?:sonnet|opus|haiku)-4-0(?:-|$))/.test(model);
 const modelName = (config: Generator) => config.model.trim().toLowerCase().split('/').at(-1)!;
 const originalGpt5 = (model: string) => /^gpt-5(?:-(?:mini|nano))?(?:-\d{4}-?\d{2}-?\d{2})?$/.test(model);
@@ -36,8 +30,8 @@ export function thinkingCapabilities(config: Generator) {
   const model = modelName(config);
   let levels: Effort[] = ['off', 'low', 'medium', 'high'];
   let canDisable = true;
-  let note = '仅影响此处配置的普通大模型。具体可用强度以模型服务支持为准。';
-  if (adapter === 'non-reasoning') { levels = ['off']; note = '只用于本身不具备思考模式的模型，不发送控制参数。'; }
+  let note: TranslationKey = 'thinking.note.general';
+  if (adapter === 'non-reasoning') { levels = ['off']; note = 'thinking.note.nonReasoning'; }
   if (adapter === 'openai') {
     levels = ['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'];
     canDisable = !originalGpt5(model) && !/^(?:o[134](?:-|$)|gpt-6-astra(?:-|$)|gpt-6\.1-sol(?:-|$))/.test(model);
@@ -53,7 +47,7 @@ export function thinkingCapabilities(config: Generator) {
   if (adapter === 'qwen') levels = ['off', 'on'];
   if (adapter.startsWith('claude-')) {
     canDisable = !/^claude-(?:fable-|mythos-|opus-5[.-]5)/.test(model);
-    note = adapter === 'claude-budget' ? '低 / 中 / 高分别设置 1,024 / 4,096 / 8,192 个思考 token 的预算上限。' : '使用 Claude 自适应思考与 effort 档位。';
+    note = adapter === 'claude-budget' ? 'thinking.note.budget' : 'thinking.note.adaptive';
   }
   if (adapter === 'deepseek') {
     levels = /^(?:deepseek-(?:v4|flash))/.test(model) ? ['off', 'low', 'high', 'max'] : ['off', 'on'];
@@ -69,8 +63,8 @@ export function thinkingCapabilities(config: Generator) {
     canDisable = !/^kimi-(?:k3(?:-|$)|k2\.7-code(?:-|$)|k2-thinking(?:-|$))/.test(model);
     if (/^(?:moonshot-|kimi-k2-(?:0905|0711|turbo-preview))/.test(model)) levels = ['off'];
   }
-  if (levels.includes('on')) note = '此型号只支持思考开关，不提供可调的低 / 中 / 高档位。';
-  if (!canDisable) note = '此型号不能关闭思考；保持“关闭”将阻止请求，请主动选择可用强度或更换模型。';
+  if (levels.includes('on')) note = 'thinking.note.toggle';
+  if (!canDisable) note = 'thinking.note.required';
   return { adapter, levels, canDisable, note };
 }
 
@@ -78,11 +72,11 @@ export function thinkingParameters(config: Generator): Record<string, unknown> {
   const { adapter, levels, canDisable } = thinkingCapabilities(config);
   const effort = config.thinkingEffort;
   const model = modelName(config);
-  if (!levels.includes(effort)) throw new Error('此模型不支持所选思考强度，请在设置中重新选择');
-  if (effort === 'off' && !canDisable) throw new Error('此模型无法关闭思考，请选择可用思考强度或更换模型；未发送请求');
+  if (!levels.includes(effort)) throw new AppError('messages.this_model_does_not_support_the_selected_reasoning_effort');
+  if (effort === 'off' && !canDisable) throw new AppError('messages.reasoning_cannot_be_disabled_for_this_model_choose_a');
   if (adapter === 'non-reasoning') return {};
   if (adapter.startsWith('claude-')) {
-    if (config.protocol !== 'anthropic') throw new Error('Claude 思考适配需要 Anthropic Messages 协议；转译网关请按其协议手动选择适配方式');
+    if (config.protocol !== 'anthropic') throw new AppError('model.anthropicProtocol');
     if (effort === 'off') return { thinking: { type: /^claude-sonnet-5[.-]5(?:-|$)/.test(model) ? 'between_tools' : 'disabled' } };
     if (adapter === 'claude-budget') {
       const budget = { low: 1024, medium: 4096, high: 8192 }[effort as 'low' | 'medium' | 'high'];
@@ -90,7 +84,7 @@ export function thinkingParameters(config: Generator): Record<string, unknown> {
     }
     return { thinking: { type: 'adaptive' }, output_config: { effort }, max_tokens: 16384 };
   }
-  if (config.protocol !== 'openai') throw new Error('所选思考适配需要 OpenAI Chat Completions 协议；请调整接口协议或适配方式');
+  if (config.protocol !== 'openai') throw new AppError('model.openaiProtocol');
   if (adapter === 'openai') return { reasoning_effort: effort === 'off' ? 'none' : effort };
   if (adapter === 'qwen') return { enable_thinking: effort !== 'off' };
   if (adapter === 'kimi' && /^kimi-k3(?:-|$)/.test(model)) return { reasoning_effort: effort };

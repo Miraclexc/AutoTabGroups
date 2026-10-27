@@ -16,7 +16,7 @@ describe('classification policy', () => {
     expect(decide(answer, [category, secondCategory], settings).categoryId).toBe('dev');
     expect(decide({ ...answer, probabilities: { dev: 0.51, travel: 0.48, none: 0.01 } }, [category, secondCategory], settings).status).toBe('uncertain');
     expect(decide({ ...answer, choice: 'none' }, [category], settings).status).toBe('unmatched');
-    expect(decide({ ...answer, choice: 'none' }, [category], settings).message).toContain('没有合适分类或页面信息不足');
+    expect(decide({ ...answer, choice: 'none' }, [category], settings).message.code).toBe('messages.no_suitable_group_or_insufficient_page_information_left_ungrouped');
   });
   it('excludes grouped, pinned, incognito, internal, and explicitly ignored tabs', () => {
     for (const patch of [{ groupId: 3 }, { pinned: true }, { incognito: true }, { url: 'chrome://settings' }]) expect(eligible(chromeTab(patch), [])).toBe(false);

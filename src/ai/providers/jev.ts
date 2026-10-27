@@ -1,3 +1,4 @@
+import { AppError } from '../../shared/errors';
 import { z } from 'zod';
 import { endpointSchema, type Settings, type Classification } from '../../shared/schemas';
 import type { TabClassifier } from '../contracts';
@@ -13,13 +14,13 @@ export function parseChoice(data: unknown, options: Record<string, string>, ids:
 export function createClassifier(settings: Settings, apiKey: string, fetcher?: Fetch): TabClassifier {
   return {
     async classify(page, categories, signal) {
-      if (!settings.classifier.model) throw new Error('请先填写 Jev 模型名称');
+      if (!settings.classifier.model) throw new AppError('model.jevName');
       const { criteria, ids } = categoryChoices(categories);
       const body = {
         model: settings.classifier.model, state: page,
         questions: { route: { type: 'choice', instructions: routeInstructions, criteria } },
       };
-      if (inputBytes(body) > settings.requestBudget) throw new Error('本页与分类规则超过请求预算，请减少正文长度或提高预算');
+      if (inputBytes(body) > settings.requestBudget) throw new AppError('budget.page');
       const data = await postJson(endpointSchema.parse(settings.classifier.baseUrl), apiKey ? { Authorization: `Bearer ${apiKey}` } : {}, body, signal, fetcher);
       return parseChoice(data, criteria, ids);
     },

@@ -21,9 +21,10 @@ describe('selectable classification backends (mock HTTP only)', () => {
     const choices = backend === 'jev' ? body.questions.route.criteria : backend === 'llm' ? JSON.parse(body.messages[1].content).choices : Object.fromEntries(body.questions[0].choices.map((item: { value: string; description: string }) => [item.value, item.description]));
     const input = backend === 'jev' ? body.state : backend === 'llm' ? JSON.parse(body.messages[1].content).page : JSON.parse(body.input);
     expect(instructions).toContain(routeInstructions);
+    expect(instructions).not.toMatch(/[\u3400-\u9fff]/);
     expect(Object.keys(choices)).toEqual(['group_0', 'none']);
     expect(choices.group_0).toContain(category.name);
-    expect(choices.none).toContain('信息确实不足');
+    expect(choices.none).toContain('genuinely cannot support any group');
     expect(input).toEqual(metadata);
     expect(decide(result, [category], settings).categoryId).toBe(category.id);
   });
@@ -88,9 +89,9 @@ describe('selectable classification backends (mock HTTP only)', () => {
     expect(body.reasoning_effort).toBe('none');
     expect(body.response_format).toEqual({ type: 'json_object' });
     expect(JSON.parse(body.messages[1].content)).toMatchObject({ page, choices: { group_0: expect.stringContaining(category.description) } });
-    expect(body.messages[0].content).toContain('不要总结网页');
+    expect(body.messages[0].content).toContain('Do not summarize the page');
     expect(result.scoreSource).toBe('llm_estimate');
-    expect(decide(result, [category], settings).message).toContain('模型自评分');
+    expect(decide(result, [category], settings).message.code).toBe('score.self');
   });
   it('supports Anthropic text blocks and classifier thinking without reading reasoning blocks', async () => {
     const fetcher = fake({ content: [{ type: 'thinking', thinking: 'not json' }, { type: 'text', text: '```json\n' + JSON.stringify(answer()) + '\n```' }], stop_reason: 'end_turn' });
